@@ -106,11 +106,14 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_density_recovery(config)
     elif args.group == "run":
         if args.action == "all":
-            result = run_all(config)
+            result = run_all(config, resume=args.resume)
         elif args.action in {"scalar", "heterogeneity"}:
             _ensure_prepared(config)
             result = run_dimension(
-                config, config["data"]["primary_dimension"], detailed=True
+                config,
+                config["data"]["primary_dimension"],
+                detailed=True,
+                resume=args.resume,
             )[0]
         else:
             _ensure_prepared(config)

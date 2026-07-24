@@ -23,8 +23,30 @@ def create_splits(config: dict[str, Any], votes_path: str | Path | None = None) 
     folds = int(config["splits"]["outer_folds"])
     seed = int(config["project"]["seed"])
     rng = np.random.default_rng(seed)
-    edge_fold = np.arange(votes.height, dtype=np.int64) % folds
-    rng.shuffle(edge_fold)
+    edge_fold = np.full(votes.height, -1, dtype=np.int16)
+    dimensions = votes["dimension"].to_numpy()
+    left_images = votes["left_image_id"].to_numpy()
+    right_images = votes["right_image_id"].to_numpy()
+    # Stratify within dimension, then reserve any edge whose assigned test fold
+    # would contain an image absent from that fold's training graph.
+    for dimension in votes["dimension"].unique().to_list():
+        indices = np.where(dimensions == dimension)[0]
+        assigned = np.arange(len(indices), dtype=np.int16) % folds
+        rng.shuffle(assigned)
+        edge_fold[indices] = assigned
+        for fold in range(folds):
+            dimension_indices = np.where(dimensions == dimension)[0]
+            train_indices = dimension_indices[edge_fold[dimension_indices] != fold]
+            train_images = set(left_images[train_indices]) | set(right_images[train_indices])
+            test_indices = dimension_indices[edge_fold[dimension_indices] == fold]
+            eligible = np.asarray(
+                [
+                    left_images[index] in train_images and right_images[index] in train_images
+                    for index in test_indices
+                ],
+                dtype=bool,
+            )
+            edge_fold[test_indices[~eligible]] = -1
     voter_values = votes["voter_id"].fill_null("__anonymous__").to_numpy()
     voter_fold = _balanced_folds(voter_values, folds, seed + 1)
 
@@ -50,7 +72,15 @@ def create_splits(config: dict[str, Any], votes_path: str | Path | None = None) 
     split_frame.write_parquet(output)
     write_json(
         output.with_suffix(".json"),
-        {"outer_folds": folds, "seed": seed, "rows": votes.height},
+        {
+            "outer_folds": folds,
+            "seed": seed,
+            "rows": votes.height,
+            "train_only_edges": int((edge_fold < 0).sum()),
+            "edge_fold_counts": {
+                str(fold): int((edge_fold == fold).sum()) for fold in range(-1, folds)
+            },
+        },
     )
     return output
 
@@ -62,4 +92,3 @@ def prepare_data(config: dict[str, Any]) -> tuple[Path, Path]:
     output.parent.mkdir(parents=True, exist_ok=True)
     votes.write_parquet(output)
     return output, create_splits(config, source)
-

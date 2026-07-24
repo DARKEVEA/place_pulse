@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
+from statistics import mode
 from typing import Any
 
 import numpy as np
@@ -36,11 +38,56 @@ from placepulse_cusp.provenance import metadata, write_json
 from placepulse_cusp.reporting.report import build_report, write_verdict
 from placepulse_cusp.simulation.recovery import validate_density_recovery
 
+RESULT_SCHEMA_VERSION = 2
+
 
 def _artifacts(config: dict[str, Any], kind: str) -> Path:
     path = Path(config["reporting"]["artifacts_dir"]) / kind
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _fold_checkpoint_path(
+    config: dict[str, Any], dimension: str, fold: int
+) -> Path:
+    config_hash = config.get("_meta", {}).get("hash", "unknown")[:16]
+    return (
+        _artifacts(config, "checkpoints")
+        / f"{dimension}_edge_fold_{fold}_{config_hash}_v{RESULT_SCHEMA_VERSION}.npz"
+    )
+
+
+def _save_fold_checkpoint(
+    path: Path,
+    *,
+    fold_metric: dict[str, Any],
+    selection: dict[str, Any],
+    scalar_scores: np.ndarray,
+    continuous_scores: np.ndarray,
+    mixture_scores: np.ndarray,
+    clusters: np.ndarray,
+) -> None:
+    np.savez_compressed(
+        path,
+        fold_metric=np.asarray(json.dumps(fold_metric)),
+        selection=np.asarray(json.dumps(selection)),
+        scalar_scores=scalar_scores,
+        continuous_scores=continuous_scores,
+        mixture_scores=mixture_scores,
+        clusters=clusters.astype(str),
+    )
+
+
+def _load_fold_checkpoint(path: Path) -> dict[str, Any]:
+    payload = np.load(path, allow_pickle=False)
+    return {
+        "fold_metric": json.loads(str(payload["fold_metric"])),
+        "selection": json.loads(str(payload["selection"])),
+        "scalar_scores": payload["scalar_scores"],
+        "continuous_scores": payload["continuous_scores"],
+        "mixture_scores": payload["mixture_scores"],
+        "clusters": payload["clusters"],
+    }
 
 
 def _eligible_test(train: pl.DataFrame, test: pl.DataFrame) -> pl.DataFrame:
@@ -72,6 +119,175 @@ def _fit_scalar(train: pl.DataFrame, config: dict[str, Any], device: torch.devic
         patience=model_cfg["patience"],
     )
     return encoder, model
+
+
+def _fit_selected_models(
+    train: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    *,
+    rank: int,
+    continuous_l2: float,
+    classes: int,
+    mixture_l2: float,
+    seed_offset: int = 0,
+) -> tuple[VoteEncoder, DavidsonModel, ContinuousPreferenceModel, MixtureDavidsonModel]:
+    encoder = VoteEncoder().fit(train)
+    encoded = encoder.transform(train, device)
+    set_deterministic(config["project"]["seed"] + seed_offset)
+    scalar = DavidsonModel.fit(
+        encoded,
+        l2=continuous_l2,
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    continuous = ContinuousPreferenceModel.fit(
+        encoded,
+        rank=rank,
+        l2=continuous_l2,
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    mixture = MixtureDavidsonModel.fit(
+        encoded,
+        classes=classes,
+        l2=mixture_l2,
+        dirichlet_alpha=config["models"]["dirichlet_alpha"],
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    return encoder, scalar, continuous, mixture
+
+
+def _evaluate_holdout(
+    train: pl.DataFrame,
+    test_all: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    *,
+    rank: int,
+    continuous_l2: float,
+    classes: int,
+    mixture_l2: float,
+    seed_offset: int,
+) -> dict[str, Any] | None:
+    test = _eligible_test(train, test_all)
+    if train.height < 20 or test.height < 5:
+        return None
+    encoder, scalar, continuous, mixture = _fit_selected_models(
+        train,
+        config,
+        device,
+        rank=rank,
+        continuous_l2=continuous_l2,
+        classes=classes,
+        mixture_l2=mixture_l2,
+        seed_offset=seed_offset,
+    )
+    encoded_test = encoder.transform(test, device)
+    choices = _choice_array(encoded_test)
+    scalar_scores = log_score(scalar.predict_proba(encoded_test), choices)
+    continuous_scores = log_score(continuous.predict_proba(encoded_test), choices)
+    mixture_scores = log_score(mixture.predict_proba(encoded_test), choices)
+    return {
+        "test_votes": test.height,
+        "test_coverage": test.height / max(test_all.height, 1),
+        "scalar_scores": scalar_scores,
+        "continuous_scores": continuous_scores,
+        "mixture_scores": mixture_scores,
+        "clusters": _cluster_array(test),
+    }
+
+
+def _evaluate_auxiliary_holdouts(
+    frame: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    *,
+    rank: int,
+    continuous_l2: float,
+    classes: int,
+    mixture_l2: float,
+) -> dict[str, Any]:
+    voter_results = []
+    for fold in range(config["splits"]["outer_folds"]):
+        result = _evaluate_holdout(
+            frame.filter(pl.col("voter_fold") != fold),
+            frame.filter(pl.col("voter_fold") == fold),
+            config,
+            device,
+            rank=rank,
+            continuous_l2=continuous_l2,
+            classes=classes,
+            mixture_l2=mixture_l2,
+            seed_offset=100 + fold,
+        )
+        if result:
+            voter_results.append(result)
+    time_result = _evaluate_holdout(
+        frame.filter(~pl.col("time_test")),
+        frame.filter(pl.col("time_test")),
+        config,
+        device,
+        rank=rank,
+        continuous_l2=continuous_l2,
+        classes=classes,
+        mixture_l2=mixture_l2,
+        seed_offset=200,
+    )
+
+    def summarise(results: list[dict[str, Any]], label: str) -> dict[str, Any]:
+        if not results:
+            return {"status": "not_evaluable"}
+        scalar = np.concatenate([item["scalar_scores"] for item in results])
+        continuous = np.concatenate([item["continuous_scores"] for item in results])
+        mixture = np.concatenate([item["mixture_scores"] for item in results])
+        clusters = np.concatenate([item["clusters"] for item in results])
+        return {
+            "status": "ok",
+            "label": label,
+            "test_votes": int(sum(item["test_votes"] for item in results)),
+            "coverage": float(
+                np.average(
+                    [item["test_coverage"] for item in results],
+                    weights=[item["test_votes"] for item in results],
+                )
+            ),
+            "continuous_elpd_ci": clustered_elpd_bootstrap(
+                continuous,
+                scalar,
+                clusters,
+                repetitions=config["gates"]["elpd_bootstrap"],
+                seed=config["project"]["seed"] + 301,
+            ),
+            "mixture_elpd_ci": clustered_elpd_bootstrap(
+                mixture,
+                scalar,
+                clusters,
+                repetitions=config["gates"]["elpd_bootstrap"],
+                seed=config["project"]["seed"] + 302,
+            ),
+        }
+
+    voter_summary = summarise(voter_results, "voter_holdout")
+    time_summary = summarise([time_result] if time_result else [], "time_holdout")
+    continuous_ok = (
+        voter_summary.get("continuous_elpd_ci", {}).get("mean", float("-inf")) > 0
+        and time_summary.get("continuous_elpd_ci", {}).get("upper", float("-inf")) >= 0
+    )
+    mixture_ok = (
+        voter_summary.get("mixture_elpd_ci", {}).get("mean", float("-inf")) > 0
+        and time_summary.get("mixture_elpd_ci", {}).get("upper", float("-inf")) >= 0
+    )
+    return {
+        "voter_holdout": voter_summary,
+        "time_holdout": time_summary,
+        "continuous_auxiliary_gate": continuous_ok,
+        "mixture_auxiliary_gate": mixture_ok,
+    }
 
 
 def _select_continuous(
@@ -143,22 +359,66 @@ def run_dimension(
     dimension: str,
     *,
     detailed: bool = False,
+    resume: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    completed_path = _artifacts(config, "metrics") / f"{dimension}_model_comparison.json"
+    if resume and completed_path.exists():
+        completed = json.loads(completed_path.read_text("utf-8"))
+        if (
+            completed.get("result_schema_version") == RESULT_SCHEMA_VERSION
+            and completed.get("provenance", {}).get("config_hash")
+            == config.get("_meta", {}).get("hash")
+        ):
+            print(
+                f"[resume] {dimension}: loading completed result",
+                file=sys.stderr,
+                flush=True,
+            )
+            return completed, {}
     votes = pl.read_parquet(Path(config["data"]["processed_dir"]) / "votes.parquet")
     splits = pl.read_parquet(Path(config["data"]["processed_dir"]) / "splits.parquet")
     frame = votes.join(splits, on="vote_id").filter(pl.col("dimension") == dimension)
     device = select_device(config["project"]["device"])
-    selected_rank, selected_l2 = _select_continuous(frame, config, device)
-    selected_classes, mixture_l2 = _select_mixture(frame, config, device)
     fold_metrics = []
-    last_models: dict[str, Any] = {}
+    selections = []
     all_scalar_scores, all_cont_scores, all_mix_scores, all_clusters = [], [], [], []
     for fold in range(config["splits"]["outer_folds"]):
+        checkpoint = _fold_checkpoint_path(config, dimension, fold)
+        if resume and checkpoint.exists():
+            cached = _load_fold_checkpoint(checkpoint)
+            fold_metrics.append(cached["fold_metric"])
+            selections.append(cached["selection"])
+            all_scalar_scores.append(cached["scalar_scores"])
+            all_cont_scores.append(cached["continuous_scores"])
+            all_mix_scores.append(cached["mixture_scores"])
+            all_clusters.append(cached["clusters"])
+            print(
+                f"[resume] {dimension}: loaded edge fold {fold}",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+        print(
+            f"[fit] {dimension}: selecting and fitting edge fold {fold}",
+            file=sys.stderr,
+            flush=True,
+        )
         train = frame.filter(pl.col("edge_fold") != fold)
         test_all = frame.filter(pl.col("edge_fold") == fold)
         test = _eligible_test(train, test_all)
         if train.height < 20 or test.height < 5:
             continue
+        selected_rank, selected_l2 = _select_continuous(train, config, device)
+        selected_classes, mixture_l2 = _select_mixture(train, config, device)
+        selections.append(
+            {
+                "fold": fold,
+                "continuous_rank": selected_rank,
+                "continuous_l2": selected_l2,
+                "mixture_classes": selected_classes,
+                "mixture_l2": mixture_l2,
+            }
+        )
         encoder = VoteEncoder().fit(train)
         encoded_train = encoder.transform(train, device)
         encoded_test = encoder.transform(test, device)
@@ -192,33 +452,59 @@ def run_dimension(
         continuous_p = continuous.predict_proba(encoded_test)
         mixture_p = mixture.predict_proba(encoded_test)
         empirical = empirical_probabilities(_choice_array(encoded_train))
-        fold_metrics.append(
-            {
-                "fold": fold,
-                "train_votes": train.height,
-                "test_votes": test.height,
-                "test_coverage": test.height / max(test_all.height, 1),
-                "m0_cross_entropy": cross_entropy(
-                    np.repeat(empirical[None, :], len(choices), axis=0), choices
-                ),
-                "scalar_cross_entropy": cross_entropy(scalar_p, choices),
-                "continuous_cross_entropy": cross_entropy(continuous_p, choices),
-                "mixture_cross_entropy": cross_entropy(mixture_p, choices),
-            }
-        )
-        all_scalar_scores.append(log_score(scalar_p, choices))
-        all_cont_scores.append(log_score(continuous_p, choices))
-        all_mix_scores.append(log_score(mixture_p, choices))
-        all_clusters.append(_cluster_array(test))
-        last_models = {
-            "encoder": encoder,
-            "scalar": scalar,
-            "continuous": continuous,
-            "mixture": mixture,
-            "train": train,
+        fold_metric = {
+            "fold": fold,
+            "train_votes": train.height,
+            "test_votes": test.height,
+            "test_coverage": test.height / max(test_all.height, 1),
+            "selected_rank": selected_rank,
+            "selected_classes": selected_classes,
+            "continuous_l2": selected_l2,
+            "mixture_l2": mixture_l2,
+            "m0_cross_entropy": cross_entropy(
+                np.repeat(empirical[None, :], len(choices), axis=0), choices
+            ),
+            "scalar_cross_entropy": cross_entropy(scalar_p, choices),
+            "continuous_cross_entropy": cross_entropy(continuous_p, choices),
+            "mixture_cross_entropy": cross_entropy(mixture_p, choices),
         }
+        scalar_scores = log_score(scalar_p, choices)
+        continuous_scores = log_score(continuous_p, choices)
+        mixture_scores = log_score(mixture_p, choices)
+        clusters = _cluster_array(test)
+        fold_metrics.append(fold_metric)
+        all_scalar_scores.append(scalar_scores)
+        all_cont_scores.append(continuous_scores)
+        all_mix_scores.append(mixture_scores)
+        all_clusters.append(clusters)
+        _save_fold_checkpoint(
+            checkpoint,
+            fold_metric=fold_metric,
+            selection=selections[-1],
+            scalar_scores=scalar_scores,
+            continuous_scores=continuous_scores,
+            mixture_scores=mixture_scores,
+            clusters=clusters,
+        )
+        print(
+            f"[checkpoint] {dimension}: saved edge fold {fold}",
+            file=sys.stderr,
+            flush=True,
+        )
     if not fold_metrics:
         raise RuntimeError(f"No evaluable outer folds for {dimension}")
+    selected_rank = mode(item["continuous_rank"] for item in selections)
+    selected_classes = mode(item["mixture_classes"] for item in selections)
+    selected_l2 = mode(
+        item["continuous_l2"]
+        for item in selections
+        if item["continuous_rank"] == selected_rank
+    )
+    mixture_l2 = mode(
+        item["mixture_l2"]
+        for item in selections
+        if item["mixture_classes"] == selected_classes
+    )
     scalar_scores = np.concatenate(all_scalar_scores)
     continuous_scores = np.concatenate(all_cont_scores)
     mixture_scores = np.concatenate(all_mix_scores)
@@ -240,9 +526,54 @@ def run_dimension(
         repetitions=config["gates"]["elpd_bootstrap"],
         seed=config["project"]["seed"] + 1,
     )
-    mixture = last_models["mixture"]
+    # Refit the selected specification on all observations only after every
+    # outer-fold score has been frozen. These models produce descriptive tables,
+    # never outer-fold predictive metrics.
+    final_encoder = VoteEncoder().fit(frame)
+    final_encoded = final_encoder.transform(frame, device)
+    set_deterministic(config["project"]["seed"])
+    final_scalar = DavidsonModel.fit(
+        final_encoded,
+        l2=selected_l2,
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    final_continuous = ContinuousPreferenceModel.fit(
+        final_encoded,
+        rank=selected_rank,
+        l2=selected_l2,
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    mixture = MixtureDavidsonModel.fit(
+        final_encoded,
+        classes=selected_classes,
+        l2=mixture_l2,
+        dirichlet_alpha=config["models"]["dirichlet_alpha"],
+        epochs=config["models"]["epochs"],
+        learning_rate=config["models"]["learning_rate"],
+        patience=config["models"]["patience"],
+    )
+    final_models = {
+        "encoder": final_encoder,
+        "scalar": final_scalar,
+        "continuous": final_continuous,
+        "mixture": mixture,
+        "train": frame,
+    }
     reversal = ranking_reversal_fraction(mixture.utilities())
-    stability = _mixture_stability(last_models["train"], selected_classes, mixture_l2, config, device)
+    stability = _mixture_stability(frame, selected_classes, mixture_l2, config, device)
+    auxiliary = _evaluate_auxiliary_holdouts(
+        frame,
+        config,
+        device,
+        rank=selected_rank,
+        continuous_l2=selected_l2,
+        classes=selected_classes,
+        mixture_l2=mixture_l2,
+    )
     verdict, gates = heterogeneity_verdict(
         config,
         scalar_ce,
@@ -253,12 +584,16 @@ def run_dimension(
         mixture.class_weights().tolist(),
         reversal,
         stability,
+        auxiliary["continuous_auxiliary_gate"],
+        auxiliary["mixture_auxiliary_gate"],
     )
     result = {
+        "result_schema_version": RESULT_SCHEMA_VERSION,
         "dimension": dimension,
         "verdict": verdict,
         "selected_rank": selected_rank,
         "selected_classes": selected_classes,
+        "outer_fold_selections": selections,
         "folds": fold_metrics,
         "scalar_cross_entropy": scalar_ce,
         "continuous_cross_entropy": continuous_ce,
@@ -268,13 +603,14 @@ def run_dimension(
         "class_weights": mixture.class_weights().tolist(),
         "ranking_reversal_fraction": reversal,
         "stability_ari": stability,
+        "auxiliary_holdouts": auxiliary,
         "gates": gates,
         "provenance": metadata(config),
     }
-    write_json(_artifacts(config, "metrics") / f"{dimension}_model_comparison.json", result)
+    write_json(completed_path, result)
     if detailed:
-        _save_model_tables(config, dimension, last_models)
-    return result, last_models
+        _save_model_tables(config, dimension, final_models)
+    return result, final_models
 
 
 def _mixture_stability(
@@ -438,7 +774,7 @@ def run_cusp_stage(
     return verdict, {"bimodality": bimodality_payload, "density": density_metrics}
 
 
-def run_all(config: dict[str, Any]) -> dict[str, Any]:
+def run_all(config: dict[str, Any], *, resume: bool = False) -> dict[str, Any]:
     try:
         standardise_votes(config)
     except (FileNotFoundError, ValueError) as error:
@@ -458,13 +794,20 @@ def run_all(config: dict[str, Any]) -> dict[str, Any]:
         )
         build_report(config)
         return {"verdict": "SCALAR_NOT_REJECTED", "simulation": simulation}
-    primary, _ = run_dimension(config, config["data"]["primary_dimension"], detailed=True)
+    primary, _ = run_dimension(
+        config,
+        config["data"]["primary_dimension"],
+        detailed=True,
+        resume=resume,
+    )
     replication = {}
     for dimension in config["data"]["dimensions"]:
         if dimension == config["data"]["primary_dimension"]:
             continue
         try:
-            replication[dimension] = run_dimension(config, dimension, detailed=False)[0]
+            replication[dimension] = run_dimension(
+                config, dimension, detailed=False, resume=resume
+            )[0]
         except RuntimeError as error:
             replication[dimension] = {"status": "not_evaluable", "reason": str(error)}
     write_json(_artifacts(config, "metrics") / "replication_dimensions.json", replication)
@@ -477,4 +820,3 @@ def run_all(config: dict[str, Any]) -> dict[str, Any]:
     )
     build_report(config)
     return {"verdict": verdict, "primary": primary, "cusp": cusp_metrics}
-

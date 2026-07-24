@@ -13,22 +13,23 @@ def heterogeneity_verdict(
     class_weights: list[float],
     reversal_fraction: float,
     stability_ari: float = 1.0,
-    time_direction_ok: bool = True,
+    continuous_auxiliary_ok: bool = True,
+    mixture_auxiliary_ok: bool = True,
     simulation_ok: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     threshold = config["gates"]["min_cross_entropy_reduction"]
 
-    def qualifies(ce: float, ci: dict[str, float]) -> bool:
+    def qualifies(ce: float, ci: dict[str, float], auxiliary_ok: bool) -> bool:
         reduction = (scalar_ce - ce) / max(scalar_ce, 1e-12)
         return (
             reduction >= threshold
             and ci["lower"] > 0
-            and time_direction_ok
+            and auxiliary_ok
             and simulation_ok
         )
 
-    continuous_ok = qualifies(continuous_ce, continuous_ci)
-    mixture_predictive = qualifies(mixture_ce, mixture_ci)
+    continuous_ok = qualifies(continuous_ce, continuous_ci, continuous_auxiliary_ok)
+    mixture_predictive = qualifies(mixture_ce, mixture_ci, mixture_auxiliary_ok)
     stable_classes = (
         sum(weight >= config["gates"]["min_class_weight"] for weight in class_weights) >= 2
         and stability_ari >= config["gates"]["min_ari"]
@@ -43,8 +44,9 @@ def heterogeneity_verdict(
     return verdict, {
         "continuous_predictive_gate": continuous_ok,
         "mixture_predictive_gate": mixture_predictive,
+        "continuous_auxiliary_gate": continuous_auxiliary_ok,
+        "mixture_auxiliary_gate": mixture_auxiliary_ok,
         "stable_class_gate": stable_classes,
         "continuous_reduction": (scalar_ce - continuous_ce) / max(scalar_ce, 1e-12),
         "mixture_reduction": (scalar_ce - mixture_ce) / max(scalar_ce, 1e-12),
     }
-

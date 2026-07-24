@@ -1,0 +1,28 @@
+extends: confirmatory.yaml
+project:
+  device: mps
+  deterministic: true
+splits:
+  outer_folds: 2
+  inner_folds: 2
+models:
+  epochs: 2
+  lbfgs_steps: 0
+  learning_rate: 0.03
+  patience: 2
+  l2_candidates: [0.001]
+  continuous_dimensions: [1]
+  mixture_classes: [2]
+  random_starts: 1
+gates:
+  elpd_bootstrap: 10
+  stability_refits: 1
+cusp:
+  bootstrap: 10
+simulation:
+  repetitions: 1
+  voters: 100
+  images: 100
+  votes: 2000
+reporting:
+  artifacts_dir: artifacts/real_preflight

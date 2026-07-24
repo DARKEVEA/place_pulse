@@ -81,9 +81,34 @@ class ContinuousPreferenceModel:
             module.load_state_dict(best_state)
         return cls(module, rank, l2, history)
 
-    def predict_proba(self, data: EncodedVotes) -> np.ndarray:
+    def predict_proba(self, data: EncodedVotes, new_user_samples: int = 32) -> np.ndarray:
         with torch.no_grad():
-            return torch.softmax(self.module.logits(data), -1).cpu().numpy()
+            probabilities = torch.softmax(self.module.logits(data), -1)
+            unknown = data.voter < 0
+            n_voters = self.module.voter_factor.shape[0]
+            if unknown.any() and n_voters:
+                sample_count = min(new_user_samples, n_voters)
+                sampled = torch.linspace(
+                    0, n_voters - 1, sample_count, device=data.left.device
+                ).long()
+                utility = self.module.utility - self.module.utility.mean()
+                base_delta = utility[data.left[unknown]] - utility[data.right[unknown]]
+                contrast = (
+                    self.module.image_factor[data.left[unknown]]
+                    - self.module.image_factor[data.right[unknown]]
+                )
+                preference = contrast @ self.module.voter_factor[sampled].T
+                delta = (
+                    base_delta[:, None]
+                    + preference
+                    + self.module.left_bias[sampled][None, :]
+                )
+                tie = self.module.voter_tie[sampled][None, :].expand_as(delta)
+                logits = davidson_logits(
+                    delta.reshape(-1), self.module.log_tie, tie.reshape(-1)
+                ).reshape(len(base_delta), sample_count, 3)
+                probabilities[unknown] = torch.softmax(logits, -1).mean(1)
+            return probabilities.cpu().numpy()
 
     def utilities(self) -> np.ndarray:
         values = self.module.utility.detach().cpu().numpy()
@@ -93,4 +118,3 @@ class ContinuousPreferenceModel:
         current = self.module.image_factor.detach().cpu().numpy()
         rotation, _ = orthogonal_procrustes(current, reference)
         return current @ rotation
-
