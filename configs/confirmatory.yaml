@@ -1,0 +1,77 @@
+project:
+  seed: 1103
+  seeds: [1103, 2207, 3319, 4421, 5527]
+  device: auto
+  deterministic: true
+data:
+  source_url: "https://www.kaggle.com/datasets/shubham6147/mit-place-pulse"
+  upstream_source_url: "https://figshare.com/articles/dataset/Place_Pulse/11859993"
+  kaggle:
+    handle: "shubham6147/mit-place-pulse"
+    version: 2
+    files: ["votes_clean.csv"]
+    output_dir: data/raw/kaggle
+  local_source: null
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+  votes_file: data/raw/kaggle/votes_clean.csv
+  studies_file: null
+  images_file: null
+  dimension_map: {}
+  primary_dimension: safety
+  dimensions: [safety, lively, beautiful, wealthy, boring, depressing]
+  minimum:
+    safety_votes: 50000
+    identified_safety_votes: 30000
+    repeat_voters: 1000
+    votes_per_repeat_voter: 5
+    largest_component_fraction: 0.90
+splits:
+  outer_folds: 5
+  inner_folds: 3
+  time_test_fraction: 0.20
+models:
+  epochs: 300
+  lbfgs_steps: 40
+  learning_rate: 0.03
+  batch_size: 65536
+  patience: 30
+  l2_candidates: [0.0001, 0.001, 0.01]
+  continuous_dimensions: [1, 2, 3, 4]
+  mixture_classes: [2, 3, 4, 5]
+  random_starts: 5
+  dirichlet_alpha: 1.2
+gates:
+  min_cross_entropy_reduction: 0.005
+  elpd_bootstrap: 200
+  elpd_ci: 0.95
+  min_class_weight: 0.10
+  stability_refits: 50
+  min_ari: 0.70
+  min_reversal_fraction: 0.05
+  min_reversal_probability: 0.90
+  min_sensitivity_correlation: 0.80
+bimodality:
+  min_neighbors: 200
+  quantile_bins: 10
+  fdr: 0.05
+  min_adjacent_windows: 3
+  min_component_weight: 0.10
+  min_ashman_d: 2.0
+cusp:
+  quadrature_points: 160
+  domain: [-8.0, 8.0]
+  max_iterations: 1000
+  bootstrap: 200
+  integration_tolerance: 0.0001
+simulation:
+  repetitions: 100
+  voters: 1500
+  images: 1000
+  votes: 100000
+  recovery_min_rate: 0.80
+  scalar_max_false_positive: 0.05
+  cusp_max_mixture_false_positive: 0.10
+reporting:
+  artifacts_dir: artifacts

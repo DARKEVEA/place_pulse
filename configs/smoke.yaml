@@ -1,0 +1,78 @@
+project:
+  seed: 1103
+  seeds: [1103, 2207]
+  device: cpu
+  deterministic: true
+data:
+  source_url: null
+  kaggle: null
+  local_source: data/smoke/raw/smoke_votes.csv
+  raw_dir: data/smoke/raw
+  interim_dir: data/smoke/interim
+  processed_dir: data/smoke/processed
+  votes_file: data/smoke/raw/smoke_votes.csv
+  studies_file: null
+  images_file: null
+  dimension_map:
+    safety: safety
+    lively: lively
+    beautiful: beautiful
+    wealthy: wealthy
+    boring: boring
+    depressing: depressing
+  primary_dimension: safety
+  dimensions: [safety, lively, beautiful, wealthy, boring, depressing]
+  minimum:
+    safety_votes: 500
+    identified_safety_votes: 400
+    repeat_voters: 40
+    votes_per_repeat_voter: 5
+    largest_component_fraction: 0.80
+splits:
+  outer_folds: 3
+  inner_folds: 2
+  time_test_fraction: 0.20
+models:
+  epochs: 35
+  lbfgs_steps: 5
+  learning_rate: 0.05
+  batch_size: 4096
+  patience: 8
+  l2_candidates: [0.001]
+  continuous_dimensions: [1, 2]
+  mixture_classes: [2, 3]
+  random_starts: 2
+  dirichlet_alpha: 1.2
+gates:
+  min_cross_entropy_reduction: 0.001
+  elpd_bootstrap: 30
+  elpd_ci: 0.95
+  min_class_weight: 0.08
+  stability_refits: 3
+  min_ari: 0.40
+  min_reversal_fraction: 0.02
+  min_reversal_probability: 0.80
+  min_sensitivity_correlation: 0.60
+bimodality:
+  min_neighbors: 20
+  quantile_bins: 5
+  fdr: 0.10
+  min_adjacent_windows: 2
+  min_component_weight: 0.08
+  min_ashman_d: 1.5
+cusp:
+  quadrature_points: 80
+  domain: [-7.0, 7.0]
+  max_iterations: 200
+  bootstrap: 30
+  integration_tolerance: 0.001
+simulation:
+  repetitions: 2
+  voters: 80
+  images: 50
+  votes: 3600
+  recovery_min_rate: 0.50
+  scalar_max_false_positive: 0.50
+  cusp_max_mixture_false_positive: 0.50
+reporting:
+  artifacts_dir: artifacts/smoke

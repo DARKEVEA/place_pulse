@@ -1,0 +1,12 @@
+extends: confirmatory.yaml
+sensitivity:
+  repeat_vote_thresholds: [3, 5, 10]
+  exclude_suspicious: [false, true]
+  equal_handling: [davidson, drop]
+  largest_component_only: [false, true]
+  mixture_class_caps: [4, 5]
+  beta_definitions: [class_variance, residual_conflict]
+  leave_one_city_out: true
+  leave_one_time_batch_out: true
+  city_reweighting: true
+
