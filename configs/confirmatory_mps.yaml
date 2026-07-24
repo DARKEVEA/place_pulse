@@ -1,0 +1,6 @@
+extends: confirmatory.yaml
+project:
+  device: mps
+  deterministic: true
+reporting:
+  artifacts_dir: artifacts/mps

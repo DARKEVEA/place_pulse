@@ -62,3 +62,19 @@ If voter-linked comparison records are unavailable, it emits
 
 See `artifacts/report/experiment_report.html` and
 `artifacts/report/verdict.json` after a run.
+
+## GPU execution
+
+Explicit MPS and CUDA profiles are provided. They fail if the requested
+accelerator is unavailable instead of silently falling back to CPU:
+
+```bash
+uv run ppc gpu check --device mps --config configs/real_preflight_mps.yaml
+uv run ppc gpu check --device cuda --config configs/real_preflight_cuda.yaml
+uv run ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
+uv run ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
+```
+
+Use Apple MPS for local preflight and an NVIDIA CUDA host for the primary
+confirmatory run. See [the GPU execution runbook](docs/GPU_RUNBOOK.md) for
+installation, verification, monitoring, resume, and failure-recovery commands.

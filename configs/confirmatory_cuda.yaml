@@ -1,0 +1,6 @@
+extends: confirmatory.yaml
+project:
+  device: cuda
+  deterministic: true
+reporting:
+  artifacts_dir: artifacts/cuda

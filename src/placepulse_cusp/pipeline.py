@@ -28,6 +28,7 @@ from placepulse_cusp.evaluation.metrics import (
     log_score,
     ranking_reversal_fraction,
 )
+from placepulse_cusp.hardware import device_report
 from placepulse_cusp.models import (
     ContinuousPreferenceModel,
     DavidsonModel,
@@ -38,7 +39,7 @@ from placepulse_cusp.provenance import metadata, write_json
 from placepulse_cusp.reporting.report import build_report, write_verdict
 from placepulse_cusp.simulation.recovery import validate_density_recovery
 
-RESULT_SCHEMA_VERSION = 2
+RESULT_SCHEMA_VERSION = 3
 
 
 def _artifacts(config: dict[str, Any], kind: str) -> Path:
@@ -379,6 +380,13 @@ def run_dimension(
     splits = pl.read_parquet(Path(config["data"]["processed_dir"]) / "splits.parquet")
     frame = votes.join(splits, on="vote_id").filter(pl.col("dimension") == dimension)
     device = select_device(config["project"]["device"])
+    compute = device_report(config["project"]["device"])
+    print(
+        f"[compute] {dimension}: requested={compute['requested']} "
+        f"selected={compute['selected']} torch={compute['python_torch']}",
+        file=sys.stderr,
+        flush=True,
+    )
     fold_metrics = []
     selections = []
     all_scalar_scores, all_cont_scores, all_mix_scores, all_clusters = [], [], [], []
@@ -605,7 +613,10 @@ def run_dimension(
         "stability_ari": stability,
         "auxiliary_holdouts": auxiliary,
         "gates": gates,
-        "provenance": metadata(config),
+        "provenance": {
+            **metadata(config),
+            "compute": compute,
+        },
     }
     write_json(completed_path, result)
     if detailed:

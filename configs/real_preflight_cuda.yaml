@@ -1,0 +1,5 @@
+extends: real_preflight.yaml
+project:
+  device: cuda
+reporting:
+  artifacts_dir: artifacts/real_preflight_cuda

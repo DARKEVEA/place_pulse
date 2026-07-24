@@ -11,8 +11,27 @@ from placepulse_cusp.constants import CHOICE_TO_INDEX
 
 
 def select_device(requested: str = "auto") -> torch.device:
+    if requested == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA was requested but torch.cuda.is_available() is false. "
+                "Check the NVIDIA driver and install a CUDA-enabled PyTorch wheel."
+            )
+        return torch.device("cuda")
+    if requested == "mps":
+        if not (
+            getattr(torch.backends, "mps", None)
+            and torch.backends.mps.is_available()
+        ):
+            raise RuntimeError(
+                "MPS was requested but is unavailable. Run outside restricted sandboxes "
+                "on an Apple-silicon Mac with an MPS-enabled PyTorch build."
+            )
+        return torch.device("mps")
+    if requested == "cpu":
+        return torch.device("cpu")
     if requested != "auto":
-        return torch.device(requested)
+        raise ValueError(f"Unsupported device: {requested}")
     if torch.cuda.is_available():
         return torch.device("cuda")
     if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
@@ -27,6 +46,11 @@ def set_deterministic(seed: int, deterministic: bool = True) -> None:
         torch.cuda.manual_seed_all(seed)
     if deterministic:
         torch.use_deterministic_algorithms(True, warn_only=True)
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cuda.matmul.allow_tf32 = False
+            torch.backends.cudnn.allow_tf32 = False
 
 
 @dataclass
@@ -121,4 +145,3 @@ def probabilities_from_logits(logits: torch.Tensor) -> torch.Tensor:
 
 def result_payload(model_name: str, history: list[float], extra: dict[str, Any]) -> dict[str, Any]:
     return {"model": model_name, "loss_history": history, **extra}
-

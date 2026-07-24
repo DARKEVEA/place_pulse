@@ -1,6 +1,6 @@
 extends: confirmatory.yaml
 project:
-  device: mps
+  device: auto
   deterministic: true
 splits:
   outer_folds: 2

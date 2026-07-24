@@ -6,9 +6,8 @@ import numpy as np
 import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
-from torch.nn import functional as F
 
-from placepulse_cusp.models.base import EncodedVotes, davidson_logits
+from placepulse_cusp.models.base import EncodedVotes
 
 
 class _MixtureModule(nn.Module):

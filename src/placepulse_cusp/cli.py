@@ -6,11 +6,11 @@ import shutil
 from pathlib import Path
 
 from placepulse_cusp.config import load_config
-from placepulse_cusp.cusp.bimodality import conditional_bimodality
 from placepulse_cusp.data.fetch import fetch_data
 from placepulse_cusp.data.schema import standardise_votes
 from placepulse_cusp.data.splits import prepare_data
 from placepulse_cusp.data.validate import validate_votes
+from placepulse_cusp.hardware import device_report, gpu_smoke
 from placepulse_cusp.pipeline import run_all, run_cusp_stage, run_dimension
 from placepulse_cusp.reporting.report import build_report
 from placepulse_cusp.simulation.generate import generate_vote_table
@@ -49,10 +49,19 @@ def _parser() -> argparse.ArgumentParser:
     clean_sub = clean.add_subparsers(dest="action", required=True)
     clean_sub.add_parser("artifacts")
 
+    gpu = sub.add_parser("gpu")
+    gpu_sub = gpu.add_subparsers(dest="action", required=True)
+    gpu_check = gpu_sub.add_parser("check")
+    gpu_check.add_argument("--device", choices=("auto", "mps", "cuda", "cpu"), default="auto")
+    gpu_benchmark = gpu_sub.add_parser("benchmark")
+    gpu_benchmark.add_argument("--device", choices=("mps", "cuda"), required=True)
+    gpu_benchmark.add_argument("--size", type=int, default=2048)
+    gpu_benchmark.add_argument("--iterations", type=int, default=5)
+
     for command in (fetch, generate):
         command.add_argument("--config", default="configs/confirmatory.yaml")
         command.add_argument("--resume", action="store_true")
-    for group_parser in (data, simulate, run, report, clean):
+    for group_parser in (data, simulate, run, report, clean, gpu):
         group_parser.add_argument("--config", default=None, help=argparse.SUPPRESS)
     # Accept --config after every leaf command.
     for leaf in [
@@ -61,6 +70,7 @@ def _parser() -> argparse.ArgumentParser:
         *[x for x in run_sub.choices.values()],
         *[x for x in report_sub.choices.values()],
         *[x for x in clean_sub.choices.values()],
+        *[x for x in gpu_sub.choices.values()],
     ]:
         if not any(action.dest == "config" for action in leaf._actions):
             leaf.add_argument("--config", default="configs/confirmatory.yaml")
@@ -141,6 +151,14 @@ def main(argv: list[str] | None = None) -> int:
         target.mkdir(parents=True, exist_ok=True)
         (target / ".gitkeep").touch()
         result = {"cleaned": str(target)}
+    elif args.group == "gpu":
+        if args.action == "check":
+            result = device_report(args.device)
+        else:
+            result = {
+                "report": device_report(args.device),
+                "benchmark": gpu_smoke(args.device, args.size, args.iterations),
+            }
     else:
         raise AssertionError("unreachable")
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
