@@ -1,39 +1,39 @@
-PYTHON ?= uv run
+PYTHON ?= python
 CONFIG ?= configs/confirmatory.yaml
 
 .PHONY: sync test smoke all gpu-check gpu-benchmark preflight-mps preflight-cuda \
 	confirmatory-mps confirmatory-cuda clean-results
 
 sync:
-	uv sync --extra dev
+	$(PYTHON) -m pip install -r requirements-dev.txt -e .
 
 test:
-	$(PYTHON) pytest
+	$(PYTHON) -m pytest
 
 smoke:
-	$(PYTHON) ppc simulate generate --config configs/smoke.yaml
-	$(PYTHON) ppc run all --config configs/smoke.yaml
+	ppc simulate generate --config configs/smoke.yaml
+	ppc run all --config configs/smoke.yaml
 
 all:
-	$(PYTHON) ppc run all --config $(CONFIG)
+	ppc run all --config $(CONFIG)
 
 gpu-check:
-	$(PYTHON) ppc gpu check --device $(DEVICE)
+	ppc gpu check --device $(DEVICE)
 
 gpu-benchmark:
-	$(PYTHON) ppc gpu benchmark --device $(DEVICE)
+	ppc gpu benchmark --device $(DEVICE)
 
 preflight-mps:
-	$(PYTHON) ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
+	ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
 
 preflight-cuda:
-	$(PYTHON) ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
+	ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
 
 confirmatory-mps:
-	$(PYTHON) ppc run all --resume --config configs/confirmatory_mps.yaml
+	ppc run all --resume --config configs/confirmatory_mps.yaml
 
 confirmatory-cuda:
-	$(PYTHON) ppc run all --resume --config configs/confirmatory_cuda.yaml
+	ppc run all --resume --config configs/confirmatory_cuda.yaml
 
 clean-results:
-	$(PYTHON) ppc clean artifacts --config $(CONFIG)
+	ppc clean artifacts --config $(CONFIG)

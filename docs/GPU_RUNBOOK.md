@@ -33,9 +33,9 @@ for one backend is never resumed by the other.
 Before a long run:
 
 ```bash
-uv run pytest
-uv run ppc data validate --config configs/confirmatory.yaml
-uv run ppc data prepare --resume --config configs/confirmatory.yaml
+python -m pytest
+ppc data validate --config configs/confirmatory.yaml
+ppc data prepare --resume --config configs/confirmatory.yaml
 ```
 
 Do not run the MPS and CUDA profiles concurrently against the same artifact
@@ -53,12 +53,13 @@ Install and verify:
 
 ```bash
 cd /Users/darkevea/code/place_pulse
-uv python install 3.12
-uv sync --python 3.12 --extra dev
+conda create -n placepulse python=3.12
+conda activate placepulse
+python -m pip install -r requirements-dev.txt -e .
 uname -m
-uv run python -c "import platform, torch; print(platform.machine()); print(torch.__version__); print(torch.backends.mps.is_built(), torch.backends.mps.is_available())"
-uv run ppc gpu check --device mps --config configs/real_preflight_mps.yaml
-uv run ppc gpu benchmark --device mps --size 2048 --iterations 5 --config configs/real_preflight_mps.yaml
+python -c "import platform, torch; print(platform.machine()); print(torch.__version__); print(torch.backends.mps.is_built(), torch.backends.mps.is_available())"
+ppc gpu check --device mps --config configs/real_preflight_mps.yaml
+ppc gpu benchmark --device mps --size 2048 --iterations 5 --config configs/real_preflight_mps.yaml
 ```
 
 Both MPS booleans must be `True`, and the selected device in the JSON output
@@ -67,7 +68,7 @@ must be `mps`. An explicit MPS profile does not fall back to CPU.
 Run the short, full-table preflight:
 
 ```bash
-uv run ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
+ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
 ```
 
 This exercises nested selection, edge holdout, final refitting, voter holdout,
@@ -77,13 +78,13 @@ engineering diagnostics, not scientific results.
 If MPS is the only available accelerator, start the confirmatory run with:
 
 ```bash
-caffeinate -dimsu uv run ppc run heterogeneity --resume --config configs/confirmatory_mps.yaml
+caffeinate -dimsu ppc run heterogeneity --resume --config configs/confirmatory_mps.yaml
 ```
 
 After inspecting the Safety result, continue all preregistered replications:
 
 ```bash
-caffeinate -dimsu uv run ppc run all --resume --config configs/confirmatory_mps.yaml
+caffeinate -dimsu ppc run all --resume --config configs/confirmatory_mps.yaml
 ```
 
 MPS currently warns that some indexed reduction operations may be
@@ -97,10 +98,10 @@ accelerator-only training policy.
 
 ## 3. RTX 3060 / CUDA (recommended confirmatory path)
 
-Linux or Ubuntu under WSL2 is the supported deployment path. The locked
-PyTorch Linux wheel carries its CUDA runtime dependencies; a separate local
-CUDA Toolkit is not required for this Python pipeline. A sufficiently recent
-NVIDIA driver is required.
+Linux or Ubuntu under WSL2 is the supported deployment path. Install a
+CUDA-enabled PyTorch build compatible with the host driver. A separate local
+CUDA Toolkit is not required when the selected PyTorch wheel carries its CUDA
+runtime dependencies.
 
 First confirm that the operating system can see the GPU:
 
@@ -112,15 +113,14 @@ Then install the project:
 
 ```bash
 cd /path/to/place_pulse
-uv python install 3.12
-uv sync --python 3.12 --extra dev --frozen
-uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO CUDA')"
+conda create -n placepulse python=3.12
+conda activate placepulse
+python -m pip install -r requirements-dev.txt -e .
+python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO CUDA')"
 ```
 
-If the repository's lock file was created on another platform and `--frozen`
-reports an unsupported resolution, run `uv sync --python 3.12 --extra dev`
-once on the CUDA host, review the lock-file change, and retain that lock with
-the archived experiment.
+Record `python -m pip freeze` with each archived experiment so the exact
+package versions and CUDA-enabled PyTorch build can be reproduced.
 
 Put a Kaggle access token at `~/.kaggle/access_token`, restrict its
 permissions, and either re-fetch the single vote table or copy the existing
@@ -128,9 +128,9 @@ data directories:
 
 ```bash
 chmod 600 ~/.kaggle/access_token
-uv run ppc data fetch --config configs/confirmatory_cuda.yaml
-uv run ppc data validate --config configs/confirmatory_cuda.yaml
-uv run ppc data prepare --resume --config configs/confirmatory_cuda.yaml
+ppc data fetch --config configs/confirmatory_cuda.yaml
+ppc data validate --config configs/confirmatory_cuda.yaml
+ppc data prepare --resume --config configs/confirmatory_cuda.yaml
 ```
 
 The fetch command downloads `votes_clean.csv`, not the 3 GB image archive.
@@ -138,8 +138,8 @@ The fetch command downloads `votes_clean.csv`, not the 3 GB image archive.
 Verify CUDA and benchmark it:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run ppc gpu check --device cuda --config configs/real_preflight_cuda.yaml
-CUDA_VISIBLE_DEVICES=0 uv run ppc gpu benchmark --device cuda --size 4096 --iterations 10 --config configs/real_preflight_cuda.yaml
+CUDA_VISIBLE_DEVICES=0 ppc gpu check --device cuda --config configs/real_preflight_cuda.yaml
+CUDA_VISIBLE_DEVICES=0 ppc gpu benchmark --device cuda --size 4096 --iterations 10 --config configs/real_preflight_cuda.yaml
 ```
 
 The output must report `selected: cuda`, an RTX 3060 device name, its compute
@@ -148,7 +148,7 @@ capability, and available GPU memory.
 Run the full-table engineering preflight:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
+CUDA_VISIBLE_DEVICES=0 ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
 ```
 
 In another terminal, monitor utilization and memory:
@@ -160,13 +160,13 @@ nvidia-smi --loop=2
 For the confirmatory Safety analysis:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run ppc run heterogeneity --resume --config configs/confirmatory_cuda.yaml
+CUDA_VISIBLE_DEVICES=0 ppc run heterogeneity --resume --config configs/confirmatory_cuda.yaml
 ```
 
 Then complete the remaining dimensions, gates, CUSP comparison, and report:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run ppc run all --resume --config configs/confirmatory_cuda.yaml
+CUDA_VISIBLE_DEVICES=0 ppc run all --resume --config configs/confirmatory_cuda.yaml
 ```
 
 Every completed outer fold is checkpointed. If power or the process is
@@ -179,7 +179,7 @@ observed preflight footprint. If CUDA reports allocator fragmentation rather
 than true exhaustion, retry from the same checkpoint with:
 
 ```bash
-PYTORCH_ALLOC_CONF=backend:cudaMallocAsync CUDA_VISIBLE_DEVICES=0 uv run ppc run heterogeneity --resume --config configs/confirmatory_cuda.yaml
+PYTORCH_ALLOC_CONF=backend:cudaMallocAsync CUDA_VISIBLE_DEVICES=0 ppc run heterogeneity --resume --config configs/confirmatory_cuda.yaml
 ```
 
 Do not lower epochs, folds, random starts, bootstrap counts, or candidate

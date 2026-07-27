@@ -8,19 +8,20 @@ bimodality gates pass.
 
 ## Quick start
 
-```bash
-uv sync --extra dev
-uv run ppc simulate generate --config configs/smoke.yaml
-uv run ppc run all --config configs/smoke.yaml
-uv run pytest
+```powershell
+conda activate arch
+python -m pip install -r requirements-dev.txt -e .
+ppc simulate generate --config configs/smoke.yaml
+ppc run all --config configs/smoke.yaml
+python -m pytest
 ```
 
 For real data, place an official Place Pulse vote export in `data/raw/` and set
 `data.local_source` in `configs/confirmatory.yaml`, then run:
 
 ```bash
-uv run ppc data fetch --config configs/confirmatory.yaml
-uv run ppc run all --config configs/confirmatory.yaml
+ppc data fetch --config configs/confirmatory.yaml
+ppc run all --config configs/confirmatory.yaml
 ```
 
 ## Kaggle real-data pipeline
@@ -33,10 +34,10 @@ Store a Kaggle API access token at `~/.kaggle/access_token` with mode `600`,
 then run:
 
 ```bash
-uv sync --extra dev
-uv run ppc data fetch --config configs/confirmatory.yaml
-uv run ppc data validate --config configs/confirmatory.yaml
-uv run ppc data prepare --resume --config configs/confirmatory.yaml
+python -m pip install -r requirements-dev.txt -e .
+ppc data fetch --config configs/confirmatory.yaml
+ppc data validate --config configs/confirmatory.yaml
+ppc data prepare --resume --config configs/confirmatory.yaml
 ```
 
 `data validate` regenerates the canonical table by default, preventing a stale
@@ -50,7 +51,7 @@ to `data/interim/cleaning_audit.parquet`.
 The complete confirmatory model run is intentionally separate:
 
 ```bash
-uv run ppc run all --config configs/confirmatory.yaml
+ppc run all --config configs/confirmatory.yaml
 ```
 
 This command is compute-intensive on the 1.56-million-vote table and should be
@@ -69,10 +70,10 @@ Explicit MPS and CUDA profiles are provided. They fail if the requested
 accelerator is unavailable instead of silently falling back to CPU:
 
 ```bash
-uv run ppc gpu check --device mps --config configs/real_preflight_mps.yaml
-uv run ppc gpu check --device cuda --config configs/real_preflight_cuda.yaml
-uv run ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
-uv run ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
+ppc gpu check --device mps --config configs/real_preflight_mps.yaml
+ppc gpu check --device cuda --config configs/real_preflight_cuda.yaml
+ppc run heterogeneity --resume --config configs/real_preflight_mps.yaml
+ppc run heterogeneity --resume --config configs/real_preflight_cuda.yaml
 ```
 
 Use Apple MPS for local preflight and an NVIDIA CUDA host for the primary
