@@ -64,6 +64,33 @@ If voter-linked comparison records are unavailable, it emits
 See `artifacts/report/experiment_report.html` and
 `artifacts/report/verdict.json` after a run.
 
+## Revised calibration and validation workflow
+
+The first completed CUDA run is retained under `artifacts/cuda` as
+`RUN_001_DIAGNOSTIC`. It must not be interpreted as confirmatory evidence.
+The revised protocol first calibrates M0--M3 on synthetic data and then runs
+Safety only:
+
+```powershell
+$env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+ppc simulate validate-models --config configs/calibration_cuda.yaml
+ppc simulate validate-density --config configs/calibration_cuda.yaml
+ppc run heterogeneity --config configs/calibration_cuda.yaml
+```
+
+Review `artifacts/run_002_calibration` before freezing the code and config.
+Only after every calibration gate passes should the six-dimension internal
+validation be run:
+
+```powershell
+$env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+ppc run all --config configs/revised_validation_cuda.yaml
+```
+
+`RUN_003_REVISED_VALIDATION` is an internal revised validation because the
+first run informed the method changes. A new or independent dataset is
+required for a future confirmatory claim.
+
 ## GPU execution
 
 Explicit MPS and CUDA profiles are provided. They fail if the requested

@@ -86,6 +86,23 @@ class EncodedVotes:
             self.vote_ids,
         )
 
+    def slice(self, start: int, stop: int) -> "EncodedVotes":
+        selection = slice(start, stop)
+        return EncodedVotes(
+            self.left[selection],
+            self.right[selection],
+            self.voter[selection],
+            self.choice[selection],
+            self.image_ids,
+            self.voter_ids,
+            self.vote_ids[selection],
+        )
+
+    def batches(self, batch_size: int | None = None):
+        size = max(1, int(batch_size or self.n_votes))
+        for start in range(0, self.n_votes, size):
+            yield self.slice(start, min(start + size, self.n_votes))
+
 
 class VoteEncoder:
     def __init__(self, image_ids: list[str] | None = None, voter_ids: list[str] | None = None):
@@ -106,7 +123,10 @@ class VoteEncoder:
         return self
 
     def transform(self, votes: pl.DataFrame, device: torch.device | str = "cpu") -> EncodedVotes:
-        left = np.asarray([self.image_index.get(x, -1) for x in votes["left_image_id"]], dtype=np.int64)
+        left = np.asarray(
+            [self.image_index.get(x, -1) for x in votes["left_image_id"]],
+            dtype=np.int64,
+        )
         right = np.asarray(
             [self.image_index.get(x, -1) for x in votes["right_image_id"]], dtype=np.int64
         )

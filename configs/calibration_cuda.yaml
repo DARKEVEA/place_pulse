@@ -1,0 +1,10 @@
+extends: confirmatory.yaml
+project:
+  device: cuda
+  deterministic: true
+simulation:
+  repetitions: 100
+reporting:
+  artifacts_dir: artifacts/run_002_calibration
+  run_label: RUN_002_CALIBRATION
+

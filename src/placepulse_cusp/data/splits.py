@@ -17,23 +17,38 @@ def _balanced_folds(values: np.ndarray, folds: int, seed: int) -> np.ndarray:
     return np.asarray([lookup[value] for value in values], dtype=np.int16)
 
 
+def edge_keys(frame: pl.DataFrame) -> np.ndarray:
+    """Return an order-invariant comparison-edge key for every vote."""
+    dimensions = frame["dimension"].to_list()
+    left = frame["left_image_id"].to_list()
+    right = frame["right_image_id"].to_list()
+    return np.asarray(
+        [
+            f"{dimension}\x1f{min(a, b)}\x1f{max(a, b)}"
+            for dimension, a, b in zip(dimensions, left, right)
+        ],
+        dtype=object,
+    )
+
+
+def grouped_edge_folds(frame: pl.DataFrame, folds: int, seed: int) -> np.ndarray:
+    """Assign all observations of the same unordered image pair to one fold."""
+    return _balanced_folds(edge_keys(frame), folds, seed)
+
+
 def create_splits(config: dict[str, Any], votes_path: str | Path | None = None) -> Path:
     path = Path(votes_path or Path(config["data"]["interim_dir"]) / "votes.parquet")
     votes = pl.read_parquet(path)
     folds = int(config["splits"]["outer_folds"])
     seed = int(config["project"]["seed"])
-    rng = np.random.default_rng(seed)
-    edge_fold = np.full(votes.height, -1, dtype=np.int16)
+    edge_fold = grouped_edge_folds(votes, folds, seed)
     dimensions = votes["dimension"].to_numpy()
     left_images = votes["left_image_id"].to_numpy()
     right_images = votes["right_image_id"].to_numpy()
-    # Stratify within dimension, then reserve any edge whose assigned test fold
-    # would contain an image absent from that fold's training graph.
+    # Reserve any edge whose assigned test fold would contain an image absent
+    # from that fold's training graph. Because assignment is grouped by edge,
+    # repeated votes for an image pair can never leak across train and test.
     for dimension in votes["dimension"].unique().to_list():
-        indices = np.where(dimensions == dimension)[0]
-        assigned = np.arange(len(indices), dtype=np.int16) % folds
-        rng.shuffle(assigned)
-        edge_fold[indices] = assigned
         for fold in range(folds):
             dimension_indices = np.where(dimensions == dimension)[0]
             train_indices = dimension_indices[edge_fold[dimension_indices] != fold]
@@ -73,6 +88,8 @@ def create_splits(config: dict[str, Any], votes_path: str | Path | None = None) 
     write_json(
         output.with_suffix(".json"),
         {
+            "split_schema_version": 2,
+            "edge_grouped": True,
             "outer_folds": folds,
             "seed": seed,
             "rows": votes.height,

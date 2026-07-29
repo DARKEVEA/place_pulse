@@ -14,7 +14,10 @@ from placepulse_cusp.hardware import device_report, gpu_smoke
 from placepulse_cusp.pipeline import run_all, run_cusp_stage, run_dimension
 from placepulse_cusp.reporting.report import build_report
 from placepulse_cusp.simulation.generate import generate_vote_table
-from placepulse_cusp.simulation.recovery import validate_density_recovery
+from placepulse_cusp.simulation.recovery import (
+    validate_density_recovery,
+    validate_model_recovery,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -32,9 +35,12 @@ def _parser() -> argparse.ArgumentParser:
     simulate_sub = simulate.add_subparsers(dest="action", required=True)
     generate = simulate_sub.add_parser("generate")
     generate.add_argument(
-        "--mechanism", choices=("scalar", "continuous", "mixture", "cusp"), default="mixture"
+        "--mechanism",
+        choices=("null", "scalar", "continuous", "mixture", "cusp"),
+        default="mixture",
     )
     simulate_sub.add_parser("validate-models")
+    simulate_sub.add_parser("validate-density")
 
     run = sub.add_parser("run")
     run_sub = run.add_subparsers(dest="action", required=True)
@@ -82,12 +88,24 @@ def _parser() -> argparse.ArgumentParser:
 def _ensure_prepared(config):
     interim = Path(config["data"]["interim_dir"]) / "votes.parquet"
     processed = Path(config["data"]["processed_dir"]) / "votes.parquet"
+    split_manifest = Path(config["data"]["processed_dir"]) / "splits.json"
     if not interim.exists():
         standardise_votes(config)
     validation = validate_votes(config, interim)
     if validation["status"] != "ok":
         raise RuntimeError("DATA_INSUFFICIENT: " + ", ".join(validation["reasons"]))
-    if not processed.exists():
+    split_current = False
+    if split_manifest.exists():
+        try:
+            split_current = (
+                json.loads(split_manifest.read_text("utf-8")).get(
+                    "split_schema_version"
+                )
+                == 2
+            )
+        except (OSError, json.JSONDecodeError):
+            split_current = False
+    if not processed.exists() or not split_current:
         prepare_data(config)
 
 
@@ -112,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.group == "simulate":
         if args.action == "generate":
             result = {"path": str(generate_vote_table(config, mechanism=args.mechanism))}
+        elif args.action == "validate-models":
+            result = validate_model_recovery(config)
         else:
             result = validate_density_recovery(config)
     elif args.group == "run":
@@ -119,6 +139,22 @@ def main(argv: list[str] | None = None) -> int:
             result = run_all(config, resume=args.resume)
         elif args.action in {"scalar", "heterogeneity"}:
             _ensure_prepared(config)
+            calibration_root = config["simulation"].get("calibration_artifacts")
+            metrics_root = (
+                Path(calibration_root)
+                if calibration_root
+                else Path(config["reporting"]["artifacts_dir"]) / "metrics"
+            )
+            model_path = metrics_root / "model_recovery.json"
+            density_path = metrics_root / "simulation_recovery.json"
+            if not model_path.exists() or not density_path.exists():
+                raise RuntimeError(
+                    "Model and density calibration must be completed before a "
+                    "real-data heterogeneity run."
+                )
+            model_status = json.loads(model_path.read_text("utf-8"))["status"]
+            density_status = json.loads(density_path.read_text("utf-8"))["status"]
+            config["_simulation_ok"] = model_status == "ok" and density_status == "ok"
             result = run_dimension(
                 config,
                 config["data"]["primary_dimension"],

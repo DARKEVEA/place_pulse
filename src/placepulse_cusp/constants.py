@@ -3,6 +3,8 @@ from __future__ import annotations
 DIMENSIONS = ("safety", "lively", "beautiful", "wealthy", "boring", "depressing")
 CHOICES = ("left", "right", "equal")
 VERDICTS = (
+    "MODEL_CALIBRATION_FAILED",
+    "SCALAR_SIGNAL_NOT_ESTABLISHED",
     "SCALAR_NOT_REJECTED",
     "SCALAR_REJECTED_CONTINUOUS",
     "SCALAR_REJECTED_MIXTURE",

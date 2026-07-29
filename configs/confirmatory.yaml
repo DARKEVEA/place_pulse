@@ -37,7 +37,7 @@ models:
   learning_rate: 0.03
   batch_size: 65536
   patience: 30
-  l2_candidates: [0.0001, 0.001, 0.01]
+  l2_candidates: [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
   continuous_dimensions: [1, 2, 3, 4]
   mixture_classes: [2, 3, 4, 5]
   random_starts: 5
@@ -51,6 +51,8 @@ gates:
   min_ari: 0.70
   min_reversal_fraction: 0.05
   min_reversal_probability: 0.90
+  min_image_votes: 20
+  min_standardized_utility_gap: 0.50
   min_sensitivity_correlation: 0.80
 bimodality:
   min_neighbors: 200
@@ -67,6 +69,8 @@ cusp:
   integration_tolerance: 0.0001
 simulation:
   repetitions: 100
+  model_repetitions: 100
+  stability_refits: 5
   voters: 1500
   images: 1000
   votes: 100000
@@ -75,3 +79,4 @@ simulation:
   cusp_max_mixture_false_positive: 0.10
 reporting:
   artifacts_dir: artifacts
+  run_label: confirmatory_legacy

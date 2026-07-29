@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import platform
 import subprocess
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,12 +35,42 @@ def metadata(config: dict[str, Any], inputs: list[str | Path] | None = None) -> 
         if path.exists() and path.is_file():
             files[str(path)] = sha256_file(path)
     return {
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "config_hash": config.get("_meta", {}).get("hash"),
         "git_commit": git_commit(),
         "seed": config["project"]["seed"],
         "inputs": files,
+        "run_label": config.get("reporting", {}).get("run_label"),
     }
+
+
+def _command_output(command: list[str]) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            command, text=True, stderr=subprocess.DEVNULL, timeout=60
+        )
+        return [line for line in output.splitlines() if line.strip()]
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+
+
+def write_run_manifest(config: dict[str, Any], inputs: list[str | Path]) -> Path:
+    import torch
+
+    target = Path(config["reporting"]["artifacts_dir"]) / "run_manifest.json"
+    payload = {
+        **metadata(config, inputs),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+        "pip_freeze": _command_output([sys.executable, "-m", "pip", "freeze"]),
+        "conda_list": _command_output(["conda", "list", "--json"]),
+    }
+    write_json(target, payload)
+    return target
 
 
 def write_json(path: str | Path, payload: Any) -> None:

@@ -14,3 +14,12 @@ def test_generator_emits_all_dimensions_and_ties(tmp_path: Path):
     assert frame["study_id"].n_unique() == 6
     assert "equal" in frame["choice"].unique().to_list()
 
+
+def test_null_generator_is_supported(tmp_path: Path):
+    config = load_config("configs/smoke.yaml")
+    config["simulation"].update({"voters": 10, "images": 8, "votes": 120})
+    target = generate_vote_table(
+        config, mechanism="null", output=tmp_path / "null.csv"
+    )
+    assert pl.read_csv(target).height == 120
+

@@ -70,6 +70,8 @@ def _write_manuscript_sections(report_dir: Path, verdict: dict[str, Any]) -> Non
     name = verdict["verdict"]
     result_text = {
         "DATA_INSUFFICIENT": "原始逐次投票数据未满足预注册的数据充分性条件，因此未进行确认性模型比较。",
+        "MODEL_CALIBRATION_FAILED": "模型恢复模拟、优化或正则搜索边界检查未通过，科学判定已中止。",
+        "SCALAR_SIGNAL_NOT_ESTABLISHED": "共享图像标量模型未能在留出数据上优于全局响应频率，尚未建立可泛化的图像排序信号。",
         "SCALAR_NOT_REJECTED": "异质性模型未在留出数据上稳定优于共享标量模型，现有数据不足以否定单一排序的经验充分性。",
         "SCALAR_REJECTED_CONTINUOUS": "连续偏好模型在留出数据上优于共享标量模型，但未恢复稳定的离散知觉类别。",
         "SCALAR_REJECTED_MIXTURE": "潜在类别模型恢复了稳定、非微小且具有排序反转的知觉机制，但条件双峰或 CUSP 门控未通过。",

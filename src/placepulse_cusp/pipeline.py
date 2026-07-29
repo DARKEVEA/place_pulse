@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -18,10 +20,11 @@ from placepulse_cusp.constants import DIMENSIONS
 from placepulse_cusp.cusp.bimodality import conditional_bimodality
 from placepulse_cusp.cusp.compare import compare_density_models
 from placepulse_cusp.data.schema import standardise_votes
-from placepulse_cusp.data.splits import prepare_data
+from placepulse_cusp.data.splits import grouped_edge_folds, prepare_data
 from placepulse_cusp.data.validate import validate_votes
 from placepulse_cusp.evaluation.gates import heterogeneity_verdict
 from placepulse_cusp.evaluation.metrics import (
+    bootstrap_reversal_evidence,
     clustered_elpd_bootstrap,
     cross_entropy,
     empirical_probabilities,
@@ -35,11 +38,14 @@ from placepulse_cusp.models import (
     MixtureDavidsonModel,
 )
 from placepulse_cusp.models.base import VoteEncoder, select_device, set_deterministic
-from placepulse_cusp.provenance import metadata, write_json
+from placepulse_cusp.provenance import metadata, write_json, write_run_manifest
 from placepulse_cusp.reporting.report import build_report, write_verdict
-from placepulse_cusp.simulation.recovery import validate_density_recovery
+from placepulse_cusp.simulation.recovery import (
+    validate_density_recovery,
+    validate_model_recovery,
+)
 
-RESULT_SCHEMA_VERSION = 3
+RESULT_SCHEMA_VERSION = 4
 
 
 def _artifacts(config: dict[str, Any], kind: str) -> Path:
@@ -52,9 +58,13 @@ def _fold_checkpoint_path(
     config: dict[str, Any], dimension: str, fold: int
 ) -> Path:
     config_hash = config.get("_meta", {}).get("hash", "unknown")[:16]
+    input_hash = config.get("_runtime_input_hash", "unknown")[:12]
     return (
         _artifacts(config, "checkpoints")
-        / f"{dimension}_edge_fold_{fold}_{config_hash}_v{RESULT_SCHEMA_VERSION}.npz"
+        / (
+            f"{dimension}_edge_fold_{fold}_{config_hash}_{input_hash}"
+            f"_v{RESULT_SCHEMA_VERSION}.npz"
+        )
     )
 
 
@@ -64,6 +74,7 @@ def _save_fold_checkpoint(
     fold_metric: dict[str, Any],
     selection: dict[str, Any],
     scalar_scores: np.ndarray,
+    m0_scores: np.ndarray,
     continuous_scores: np.ndarray,
     mixture_scores: np.ndarray,
     clusters: np.ndarray,
@@ -73,6 +84,7 @@ def _save_fold_checkpoint(
         fold_metric=np.asarray(json.dumps(fold_metric)),
         selection=np.asarray(json.dumps(selection)),
         scalar_scores=scalar_scores,
+        m0_scores=m0_scores,
         continuous_scores=continuous_scores,
         mixture_scores=mixture_scores,
         clusters=clusters.astype(str),
@@ -85,6 +97,7 @@ def _load_fold_checkpoint(path: Path) -> dict[str, Any]:
         "fold_metric": json.loads(str(payload["fold_metric"])),
         "selection": json.loads(str(payload["selection"])),
         "scalar_scores": payload["scalar_scores"],
+        "m0_scores": payload["m0_scores"],
         "continuous_scores": payload["continuous_scores"],
         "mixture_scores": payload["mixture_scores"],
         "clusters": payload["clusters"],
@@ -108,16 +121,39 @@ def _cluster_array(frame: pl.DataFrame) -> np.ndarray:
     return np.asarray([v if v is not None else f"anonymous:{i}" for v, i in zip(voter, vote)])
 
 
-def _fit_scalar(train: pl.DataFrame, config: dict[str, Any], device: torch.device):
+def _training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    model_cfg = config["models"]
+    return {
+        "epochs": model_cfg["epochs"],
+        "learning_rate": model_cfg["learning_rate"],
+        "patience": model_cfg["patience"],
+        "batch_size": model_cfg.get("batch_size"),
+        "lbfgs_steps": model_cfg.get("lbfgs_steps", 0),
+    }
+
+
+def _fit_scalar(
+    train: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    *,
+    baseline: dict[str, Any] | None = None,
+):
     encoder = VoteEncoder().fit(train)
     encoded = encoder.transform(train, device)
     model_cfg = config["models"]
+    baseline = baseline or {
+        "name": "m1a",
+        "utility_l2": model_cfg["l2_candidates"][0],
+        "style_l2": model_cfg["l2_candidates"][0],
+        "response_styles": False,
+    }
     model = DavidsonModel.fit(
         encoded,
-        l2=model_cfg["l2_candidates"][0],
-        epochs=model_cfg["epochs"],
-        learning_rate=model_cfg["learning_rate"],
-        patience=model_cfg["patience"],
+        utility_l2=baseline["utility_l2"],
+        style_l2=baseline["style_l2"],
+        response_styles=baseline["response_styles"],
+        **_training_kwargs(config),
     )
     return encoder, model
 
@@ -127,6 +163,7 @@ def _fit_selected_models(
     config: dict[str, Any],
     device: torch.device,
     *,
+    baseline: dict[str, Any],
     rank: int,
     continuous_l2: float,
     classes: int,
@@ -138,27 +175,29 @@ def _fit_selected_models(
     set_deterministic(config["project"]["seed"] + seed_offset)
     scalar = DavidsonModel.fit(
         encoded,
-        l2=continuous_l2,
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        utility_l2=baseline["utility_l2"],
+        style_l2=baseline["style_l2"],
+        response_styles=baseline["response_styles"],
+        **_training_kwargs(config),
     )
     continuous = ContinuousPreferenceModel.fit(
         encoded,
         rank=rank,
         l2=continuous_l2,
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        utility_l2=baseline["utility_l2"],
+        style_l2=baseline["style_l2"],
+        response_styles=baseline["response_styles"],
+        **_training_kwargs(config),
     )
     mixture = MixtureDavidsonModel.fit(
         encoded,
         classes=classes,
         l2=mixture_l2,
+        utility_l2=baseline["utility_l2"],
+        style_l2=baseline["style_l2"],
+        response_styles=baseline["response_styles"],
         dirichlet_alpha=config["models"]["dirichlet_alpha"],
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        **_training_kwargs(config),
     )
     return encoder, scalar, continuous, mixture
 
@@ -169,6 +208,7 @@ def _evaluate_holdout(
     config: dict[str, Any],
     device: torch.device,
     *,
+    baseline: dict[str, Any],
     rank: int,
     continuous_l2: float,
     classes: int,
@@ -183,6 +223,7 @@ def _evaluate_holdout(
         config,
         device,
         rank=rank,
+        baseline=baseline,
         continuous_l2=continuous_l2,
         classes=classes,
         mixture_l2=mixture_l2,
@@ -208,6 +249,7 @@ def _evaluate_auxiliary_holdouts(
     config: dict[str, Any],
     device: torch.device,
     *,
+    baseline: dict[str, Any],
     rank: int,
     continuous_l2: float,
     classes: int,
@@ -221,6 +263,7 @@ def _evaluate_auxiliary_holdouts(
             config,
             device,
             rank=rank,
+            baseline=baseline,
             continuous_l2=continuous_l2,
             classes=classes,
             mixture_l2=mixture_l2,
@@ -234,6 +277,7 @@ def _evaluate_auxiliary_holdouts(
         config,
         device,
         rank=rank,
+        baseline=baseline,
         continuous_l2=continuous_l2,
         classes=classes,
         mixture_l2=mixture_l2,
@@ -291,68 +335,203 @@ def _evaluate_auxiliary_holdouts(
     }
 
 
-def _select_continuous(
+def _inner_edge_splits(
+    train: pl.DataFrame, config: dict[str, Any], seed_offset: int
+) -> list[tuple[pl.DataFrame, pl.DataFrame]]:
+    folds = int(config["splits"]["inner_folds"])
+    assigned = grouped_edge_folds(train, folds, config["project"]["seed"] + seed_offset)
+    result = []
+    for fold in range(folds):
+        inner_train = train.filter(assigned != fold)
+        validation = _eligible_test(inner_train, train.filter(assigned == fold))
+        if inner_train.height >= 20 and validation.height >= 20:
+            result.append((inner_train, validation))
+    return result
+
+
+def _selection_training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    kwargs = _training_kwargs(config)
+    kwargs["epochs"] = max(20, config["models"]["epochs"] // 2)
+    return kwargs
+
+
+def _select_scalar_baseline(
     train: pl.DataFrame, config: dict[str, Any], device: torch.device
+) -> dict[str, Any]:
+    splits = _inner_edge_splits(train, config, 41)
+    candidates = config["models"]["l2_candidates"]
+    if not splits:
+        return {
+            "name": "m1a",
+            "utility_l2": candidates[0],
+            "style_l2": candidates[0],
+            "response_styles": False,
+            "selection_boundary": True,
+        }
+    m1a_scores: dict[float, list[float]] = {float(x): [] for x in candidates}
+    encoded = []
+    for inner_train, validation in splits:
+        encoder = VoteEncoder().fit(inner_train)
+        encoded.append(
+            (encoder.transform(inner_train, device), encoder.transform(validation, device))
+        )
+    for utility_l2 in candidates:
+        for fold, (encoded_train, encoded_val) in enumerate(encoded):
+            set_deterministic(config["project"]["seed"] + 410 + fold)
+            model = DavidsonModel.fit(
+                encoded_train,
+                utility_l2=utility_l2,
+                style_l2=utility_l2,
+                response_styles=False,
+                **_selection_training_kwargs(config),
+            )
+            m1a_scores[float(utility_l2)].append(
+                cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+            )
+    utility_l2 = min(m1a_scores, key=lambda x: float(np.mean(m1a_scores[x])))
+    a_scores = np.asarray(m1a_scores[utility_l2])
+    m1b_scores: dict[float, list[float]] = {float(x): [] for x in candidates}
+    for style_l2 in candidates:
+        for fold, (encoded_train, encoded_val) in enumerate(encoded):
+            set_deterministic(config["project"]["seed"] + 510 + fold)
+            model = DavidsonModel.fit(
+                encoded_train,
+                utility_l2=utility_l2,
+                style_l2=style_l2,
+                response_styles=True,
+                **_selection_training_kwargs(config),
+            )
+            m1b_scores[float(style_l2)].append(
+                cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+            )
+    style_l2 = min(m1b_scores, key=lambda x: float(np.mean(m1b_scores[x])))
+    b_scores = np.asarray(m1b_scores[style_l2])
+    improvement = a_scores - b_scores
+    standard_error = (
+        float(improvement.std(ddof=1) / np.sqrt(len(improvement)))
+        if len(improvement) > 1
+        else 0.0
+    )
+    use_styles = float(improvement.mean()) > standard_error
+    values = [float(x) for x in candidates]
+    boundary = len(values) > 1 and (
+        utility_l2 in {min(values), max(values)}
+        or (use_styles and style_l2 in {min(values), max(values)})
+    )
+    return {
+        "name": "m1b" if use_styles else "m1a",
+        "utility_l2": utility_l2,
+        "style_l2": style_l2,
+        "response_styles": use_styles,
+        "m1b_improvement": float(improvement.mean()),
+        "m1b_improvement_se": standard_error,
+        "selection_boundary": boundary,
+    }
+
+
+def _best_continuous_fit(
+    encoded_train, config, baseline, rank, l2, seed, *, selection: bool = True
+):
+    best = None
+    for start in range(max(1, int(config["models"].get("random_starts", 1)))):
+        set_deterministic(seed + start)
+        model = ContinuousPreferenceModel.fit(
+            encoded_train,
+            rank=rank,
+            l2=l2,
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
+            **(_selection_training_kwargs(config) if selection else _training_kwargs(config)),
+        )
+        if best is None or model.history[-1] < best.history[-1]:
+            best = model
+    return best
+
+
+def _select_continuous(
+    train: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    baseline: dict[str, Any],
 ) -> tuple[int, float]:
-    rng = np.random.default_rng(config["project"]["seed"] + 91)
-    mask = rng.random(train.height) < 0.8
-    inner_train, validation = train.filter(mask), train.filter(~mask)
-    validation = _eligible_test(inner_train, validation)
-    if validation.height < 20:
+    splits = _inner_edge_splits(train, config, 91)
+    if not splits:
         return config["models"]["continuous_dimensions"][0], config["models"]["l2_candidates"][0]
-    encoder = VoteEncoder().fit(inner_train)
-    encoded_train = encoder.transform(inner_train, device)
-    encoded_val = encoder.transform(validation, device)
-    best = (float("inf"), 1, 1e-3)
+    scores = {}
     for rank in config["models"]["continuous_dimensions"]:
         for l2 in config["models"]["l2_candidates"]:
-            set_deterministic(config["project"]["seed"] + rank)
-            model = ContinuousPreferenceModel.fit(
-                encoded_train,
-                rank=rank,
-                l2=l2,
-                epochs=max(20, config["models"]["epochs"] // 2),
-                learning_rate=config["models"]["learning_rate"],
-                patience=config["models"]["patience"],
-            )
-            score = cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
-            if score < best[0]:
-                best = score, rank, l2
-    return best[1], best[2]
+            values = []
+            for fold, (inner_train, validation) in enumerate(splits):
+                encoder = VoteEncoder().fit(inner_train)
+                encoded_train = encoder.transform(inner_train, device)
+                encoded_val = encoder.transform(validation, device)
+                model = _best_continuous_fit(
+                    encoded_train,
+                    config,
+                    baseline,
+                    rank,
+                    l2,
+                    config["project"]["seed"] + 9100 + fold * 100,
+                )
+                values.append(
+                    cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+                )
+            scores[(rank, float(l2))] = float(np.mean(values))
+    return min(scores, key=scores.get)
+
+
+def _best_mixture_fit(
+    encoded_train, config, baseline, classes, l2, seed, *, selection: bool = True
+):
+    best = None
+    for start in range(max(1, int(config["models"].get("random_starts", 1)))):
+        set_deterministic(seed + start)
+        model = MixtureDavidsonModel.fit(
+            encoded_train,
+            classes=classes,
+            l2=l2,
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
+            dirichlet_alpha=config["models"]["dirichlet_alpha"],
+            **(_selection_training_kwargs(config) if selection else _training_kwargs(config)),
+        )
+        if best is None or model.history[-1] < best.history[-1]:
+            best = model
+    return best
 
 
 def _select_mixture(
-    train: pl.DataFrame, config: dict[str, Any], device: torch.device
+    train: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    baseline: dict[str, Any],
 ) -> tuple[int, float]:
-    rng = np.random.default_rng(config["project"]["seed"] + 193)
-    voters = np.asarray(train["voter_id"].fill_null("__anonymous__").to_list())
-    unique = np.unique(voters)
-    val_voters = set(rng.choice(unique, max(1, len(unique) // 5), replace=False))
-    mask = np.asarray([v not in val_voters for v in voters])
-    inner_train, validation = train.filter(mask), train.filter(~mask)
-    validation = _eligible_test(inner_train, validation)
-    if validation.height < 20:
+    splits = _inner_edge_splits(train, config, 193)
+    if not splits:
         return config["models"]["mixture_classes"][0], config["models"]["l2_candidates"][0]
-    encoder = VoteEncoder().fit(inner_train)
-    encoded_train = encoder.transform(inner_train, device)
-    encoded_val = encoder.transform(validation, device)
-    best = (float("inf"), 2, 1e-3)
+    scores = {}
     for classes in config["models"]["mixture_classes"]:
         for l2 in config["models"]["l2_candidates"]:
-            set_deterministic(config["project"]["seed"] + classes)
-            model = MixtureDavidsonModel.fit(
-                encoded_train,
-                classes=classes,
-                l2=l2,
-                dirichlet_alpha=config["models"]["dirichlet_alpha"],
-                epochs=max(20, config["models"]["epochs"] // 2),
-                learning_rate=config["models"]["learning_rate"],
-                patience=config["models"]["patience"],
-            )
-            score = cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
-            if score < best[0]:
-                best = score, classes, l2
-    return best[1], best[2]
+            values = []
+            for fold, (inner_train, validation) in enumerate(splits):
+                encoder = VoteEncoder().fit(inner_train)
+                encoded_train = encoder.transform(inner_train, device)
+                encoded_val = encoder.transform(validation, device)
+                model = _best_mixture_fit(
+                    encoded_train,
+                    config,
+                    baseline,
+                    classes,
+                    l2,
+                    config["project"]["seed"] + 19300 + fold * 100,
+                )
+                values.append(
+                    cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+                )
+            scores[(classes, float(l2))] = float(np.mean(values))
+    return min(scores, key=scores.get)
 
 
 def run_dimension(
@@ -363,12 +542,23 @@ def run_dimension(
     resume: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     completed_path = _artifacts(config, "metrics") / f"{dimension}_model_comparison.json"
+    input_paths = [
+        Path(config["data"]["processed_dir"]) / "votes.parquet",
+        Path(config["data"]["processed_dir"]) / "splits.parquet",
+        Path(config["data"]["processed_dir"]) / "data_validation.json",
+    ]
+    current_provenance = metadata(config, input_paths)
+    config["_runtime_input_hash"] = hashlib.sha256(
+        json.dumps(current_provenance["inputs"], sort_keys=True).encode("utf-8")
+    ).hexdigest()
     if resume and completed_path.exists():
         completed = json.loads(completed_path.read_text("utf-8"))
         if (
             completed.get("result_schema_version") == RESULT_SCHEMA_VERSION
             and completed.get("provenance", {}).get("config_hash")
             == config.get("_meta", {}).get("hash")
+            and completed.get("provenance", {}).get("inputs")
+            == current_provenance["inputs"]
         ):
             print(
                 f"[resume] {dimension}: loading completed result",
@@ -380,6 +570,15 @@ def run_dimension(
     splits = pl.read_parquet(Path(config["data"]["processed_dir"]) / "splits.parquet")
     frame = votes.join(splits, on="vote_id").filter(pl.col("dimension") == dimension)
     device = select_device(config["project"]["device"])
+    if (
+        device.type == "cuda"
+        and config["project"].get("deterministic", False)
+        and os.environ.get("CUBLAS_WORKSPACE_CONFIG") not in {":4096:8", ":16:8"}
+    ):
+        raise RuntimeError(
+            "Deterministic CUDA requires CUBLAS_WORKSPACE_CONFIG=:4096:8 "
+            "(or :16:8) before Python starts."
+        )
     compute = device_report(config["project"]["device"])
     print(
         f"[compute] {dimension}: requested={compute['requested']} "
@@ -389,7 +588,13 @@ def run_dimension(
     )
     fold_metrics = []
     selections = []
-    all_scalar_scores, all_cont_scores, all_mix_scores, all_clusters = [], [], [], []
+    all_m0_scores, all_scalar_scores, all_cont_scores, all_mix_scores, all_clusters = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
     for fold in range(config["splits"]["outer_folds"]):
         checkpoint = _fold_checkpoint_path(config, dimension, fold)
         if resume and checkpoint.exists():
@@ -397,6 +602,7 @@ def run_dimension(
             fold_metrics.append(cached["fold_metric"])
             selections.append(cached["selection"])
             all_scalar_scores.append(cached["scalar_scores"])
+            all_m0_scores.append(cached["m0_scores"])
             all_cont_scores.append(cached["continuous_scores"])
             all_mix_scores.append(cached["mixture_scores"])
             all_clusters.append(cached["clusters"])
@@ -416,15 +622,32 @@ def run_dimension(
         test = _eligible_test(train, test_all)
         if train.height < 20 or test.height < 5:
             continue
-        selected_rank, selected_l2 = _select_continuous(train, config, device)
-        selected_classes, mixture_l2 = _select_mixture(train, config, device)
+        baseline = _select_scalar_baseline(train, config, device)
+        selected_rank, selected_l2 = _select_continuous(
+            train, config, device, baseline
+        )
+        selected_classes, mixture_l2 = _select_mixture(
+            train, config, device, baseline
+        )
+        candidate_values = [float(x) for x in config["models"]["l2_candidates"]]
+        continuous_boundary = len(candidate_values) > 1 and selected_l2 in {
+            min(candidate_values),
+            max(candidate_values),
+        }
+        mixture_boundary = len(candidate_values) > 1 and mixture_l2 in {
+            min(candidate_values),
+            max(candidate_values),
+        }
         selections.append(
             {
                 "fold": fold,
+                "baseline": baseline,
                 "continuous_rank": selected_rank,
                 "continuous_l2": selected_l2,
                 "mixture_classes": selected_classes,
                 "mixture_l2": mixture_l2,
+                "continuous_selection_boundary": continuous_boundary,
+                "mixture_selection_boundary": mixture_boundary,
             }
         )
         encoder = VoteEncoder().fit(train)
@@ -433,33 +656,71 @@ def run_dimension(
         set_deterministic(config["project"]["seed"] + fold)
         scalar = DavidsonModel.fit(
             encoded_train,
-            l2=selected_l2,
-            epochs=config["models"]["epochs"],
-            learning_rate=config["models"]["learning_rate"],
-            patience=config["models"]["patience"],
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
+            **_training_kwargs(config),
         )
-        continuous = ContinuousPreferenceModel.fit(
+        continuous = _best_continuous_fit(
             encoded_train,
-            rank=selected_rank,
-            l2=selected_l2,
-            epochs=config["models"]["epochs"],
-            learning_rate=config["models"]["learning_rate"],
-            patience=config["models"]["patience"],
+            config,
+            baseline,
+            selected_rank,
+            selected_l2,
+            config["project"]["seed"] + fold * 1000,
+            selection=False,
         )
-        mixture = MixtureDavidsonModel.fit(
+        mixture = _best_mixture_fit(
             encoded_train,
-            classes=selected_classes,
-            l2=mixture_l2,
-            dirichlet_alpha=config["models"]["dirichlet_alpha"],
-            epochs=config["models"]["epochs"],
-            learning_rate=config["models"]["learning_rate"],
-            patience=config["models"]["patience"],
+            config,
+            baseline,
+            selected_classes,
+            mixture_l2,
+            config["project"]["seed"] + 50000 + fold * 1000,
+            selection=False,
         )
         choices = _choice_array(encoded_test)
         scalar_p = scalar.predict_proba(encoded_test)
         continuous_p = continuous.predict_proba(encoded_test)
         mixture_p = mixture.predict_proba(encoded_test)
+        scalar_population_p = scalar.predict_proba(encoded_test, population=True)
+        continuous_population_p = continuous.predict_proba(
+            encoded_test, population=True
+        )
+        mixture_population_p = mixture.predict_proba(encoded_test, population=True)
         empirical = empirical_probabilities(_choice_array(encoded_train))
+        history_counts = {
+            voter: count
+            for voter, count in train.filter(pl.col("voter_id").is_not_null())
+            .group_by("voter_id")
+            .len()
+            .iter_rows()
+        }
+        test_history = np.asarray(
+            [history_counts.get(voter, 0) for voter in test["voter_id"].to_list()]
+        )
+        history_diagnostics = {}
+        for label, mask in {
+            "0_4": test_history < 5,
+            "5_19": (test_history >= 5) & (test_history < 20),
+            "20_plus": test_history >= 20,
+        }.items():
+            if mask.any():
+                history_diagnostics[label] = {
+                    "votes": int(mask.sum()),
+                    "continuous_elpd_vs_scalar": float(
+                        (
+                            log_score(continuous_p[mask], choices[mask])
+                            - log_score(scalar_p[mask], choices[mask])
+                        ).mean()
+                    ),
+                    "mixture_elpd_vs_scalar": float(
+                        (
+                            log_score(mixture_p[mask], choices[mask])
+                            - log_score(scalar_p[mask], choices[mask])
+                        ).mean()
+                    ),
+                }
         fold_metric = {
             "fold": fold,
             "train_votes": train.height,
@@ -467,6 +728,7 @@ def run_dimension(
             "test_coverage": test.height / max(test_all.height, 1),
             "selected_rank": selected_rank,
             "selected_classes": selected_classes,
+            "baseline": baseline,
             "continuous_l2": selected_l2,
             "mixture_l2": mixture_l2,
             "m0_cross_entropy": cross_entropy(
@@ -475,13 +737,22 @@ def run_dimension(
             "scalar_cross_entropy": cross_entropy(scalar_p, choices),
             "continuous_cross_entropy": cross_entropy(continuous_p, choices),
             "mixture_cross_entropy": cross_entropy(mixture_p, choices),
+            "population_marginalized_cross_entropy": {
+                "scalar": cross_entropy(scalar_population_p, choices),
+                "continuous": cross_entropy(continuous_population_p, choices),
+                "mixture": cross_entropy(mixture_population_p, choices),
+            },
+            "history_strata": history_diagnostics,
         }
         scalar_scores = log_score(scalar_p, choices)
+        m0_p = np.repeat(empirical[None, :], len(choices), axis=0)
+        m0_scores = log_score(m0_p, choices)
         continuous_scores = log_score(continuous_p, choices)
         mixture_scores = log_score(mixture_p, choices)
         clusters = _cluster_array(test)
         fold_metrics.append(fold_metric)
         all_scalar_scores.append(scalar_scores)
+        all_m0_scores.append(m0_scores)
         all_cont_scores.append(continuous_scores)
         all_mix_scores.append(mixture_scores)
         all_clusters.append(clusters)
@@ -490,6 +761,7 @@ def run_dimension(
             fold_metric=fold_metric,
             selection=selections[-1],
             scalar_scores=scalar_scores,
+            m0_scores=m0_scores,
             continuous_scores=continuous_scores,
             mixture_scores=mixture_scores,
             clusters=clusters,
@@ -503,6 +775,24 @@ def run_dimension(
         raise RuntimeError(f"No evaluable outer folds for {dimension}")
     selected_rank = mode(item["continuous_rank"] for item in selections)
     selected_classes = mode(item["mixture_classes"] for item in selections)
+    baseline_name = mode(item["baseline"]["name"] for item in selections)
+    matching_baselines = [
+        item["baseline"] for item in selections if item["baseline"]["name"] == baseline_name
+    ]
+    baseline = {
+        "name": baseline_name,
+        "utility_l2": mode(item["utility_l2"] for item in matching_baselines),
+        "style_l2": mode(item["style_l2"] for item in matching_baselines),
+        "response_styles": baseline_name == "m1b",
+        "selection_boundary": any(
+            item.get("selection_boundary", False) for item in matching_baselines
+        )
+        or any(
+            item.get("continuous_selection_boundary", False)
+            or item.get("mixture_selection_boundary", False)
+            for item in selections
+        ),
+    }
     selected_l2 = mode(
         item["continuous_l2"]
         for item in selections
@@ -513,11 +803,13 @@ def run_dimension(
         for item in selections
         if item["mixture_classes"] == selected_classes
     )
+    m0_scores = np.concatenate(all_m0_scores)
     scalar_scores = np.concatenate(all_scalar_scores)
     continuous_scores = np.concatenate(all_cont_scores)
     mixture_scores = np.concatenate(all_mix_scores)
     clusters = np.concatenate(all_clusters)
     scalar_ce = float(-scalar_scores.mean())
+    m0_ce = float(-m0_scores.mean())
     continuous_ce = float(-continuous_scores.mean())
     mixture_ce = float(-mixture_scores.mean())
     continuous_ci = clustered_elpd_bootstrap(
@@ -534,6 +826,13 @@ def run_dimension(
         repetitions=config["gates"]["elpd_bootstrap"],
         seed=config["project"]["seed"] + 1,
     )
+    scalar_vs_m0_ci = clustered_elpd_bootstrap(
+        scalar_scores,
+        m0_scores,
+        clusters,
+        repetitions=config["gates"]["elpd_bootstrap"],
+        seed=config["project"]["seed"] + 2,
+    )
     # Refit the selected specification on all observations only after every
     # outer-fold score has been frozen. These models produce descriptive tables,
     # never outer-fold predictive metrics.
@@ -542,27 +841,28 @@ def run_dimension(
     set_deterministic(config["project"]["seed"])
     final_scalar = DavidsonModel.fit(
         final_encoded,
-        l2=selected_l2,
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        utility_l2=baseline["utility_l2"],
+        style_l2=baseline["style_l2"],
+        response_styles=baseline["response_styles"],
+        **_training_kwargs(config),
     )
-    final_continuous = ContinuousPreferenceModel.fit(
+    final_continuous = _best_continuous_fit(
         final_encoded,
-        rank=selected_rank,
-        l2=selected_l2,
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        config,
+        baseline,
+        selected_rank,
+        selected_l2,
+        config["project"]["seed"] + 60000,
+        selection=False,
     )
-    mixture = MixtureDavidsonModel.fit(
+    mixture = _best_mixture_fit(
         final_encoded,
-        classes=selected_classes,
-        l2=mixture_l2,
-        dirichlet_alpha=config["models"]["dirichlet_alpha"],
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
+        config,
+        baseline,
+        selected_classes,
+        mixture_l2,
+        config["project"]["seed"] + 70000,
+        selection=False,
     )
     final_models = {
         "encoder": final_encoder,
@@ -571,12 +871,33 @@ def run_dimension(
         "mixture": mixture,
         "train": frame,
     }
-    reversal = ranking_reversal_fraction(mixture.utilities())
-    stability = _mixture_stability(frame, selected_classes, mixture_l2, config, device)
+    raw_reversal = ranking_reversal_fraction(mixture.utilities())
+    stability, stability_models = _mixture_stability(
+        frame, selected_classes, mixture_l2, baseline, config, device
+    )
+    image_counts_lookup = {}
+    for column in ("left_image_id", "right_image_id"):
+        for image, count in frame.group_by(column).len().iter_rows():
+            image_counts_lookup[image] = image_counts_lookup.get(image, 0) + count
+    image_counts = np.asarray(
+        [image_counts_lookup.get(image, 0) for image in final_encoder.image_ids]
+    )
+    reversal_evidence = bootstrap_reversal_evidence(
+        stability_models,
+        image_counts,
+        min_image_votes=config["gates"].get("min_image_votes", 20),
+        min_probability=config["gates"]["min_reversal_probability"],
+        min_standardized_gap=config["gates"].get(
+            "min_standardized_utility_gap", 0.5
+        ),
+        seed=config["project"]["seed"],
+    )
+    reversal = float(reversal_evidence["fraction"])
     auxiliary = _evaluate_auxiliary_holdouts(
         frame,
         config,
         device,
+        baseline=baseline,
         rank=selected_rank,
         continuous_l2=selected_l2,
         classes=selected_classes,
@@ -584,16 +905,20 @@ def run_dimension(
     )
     verdict, gates = heterogeneity_verdict(
         config,
+        m0_ce,
         scalar_ce,
         continuous_ce,
         mixture_ce,
         continuous_ci,
         mixture_ci,
+        scalar_vs_m0_ci,
         mixture.class_weights().tolist(),
         reversal,
         stability,
         auxiliary["continuous_auxiliary_gate"],
         auxiliary["mixture_auxiliary_gate"],
+        simulation_ok=config.get("_simulation_ok", True),
+        selection_boundary=baseline["selection_boundary"],
     )
     result = {
         "result_schema_version": RESULT_SCHEMA_VERSION,
@@ -601,20 +926,26 @@ def run_dimension(
         "verdict": verdict,
         "selected_rank": selected_rank,
         "selected_classes": selected_classes,
+        "selected_baseline": baseline,
         "outer_fold_selections": selections,
         "folds": fold_metrics,
+        "m0_cross_entropy": m0_ce,
         "scalar_cross_entropy": scalar_ce,
+        "scalar_vs_m0_elpd_ci": scalar_vs_m0_ci,
         "continuous_cross_entropy": continuous_ce,
         "mixture_cross_entropy": mixture_ce,
         "continuous_elpd_ci": continuous_ci,
         "mixture_elpd_ci": mixture_ci,
         "class_weights": mixture.class_weights().tolist(),
         "ranking_reversal_fraction": reversal,
+        "raw_ranking_reversal_fraction": raw_reversal,
+        "ranking_reversal_evidence": reversal_evidence,
         "stability_ari": stability,
+        "stability_refits_completed": len(stability_models),
         "auxiliary_holdouts": auxiliary,
         "gates": gates,
         "provenance": {
-            **metadata(config),
+            **current_provenance,
             "compute": compute,
         },
     }
@@ -628,33 +959,76 @@ def _mixture_stability(
     train: pl.DataFrame,
     classes: int,
     l2: float,
+    baseline: dict[str, Any],
     config: dict[str, Any],
     device: torch.device,
-) -> float:
-    encoder = VoteEncoder().fit(train)
-    encoded = encoder.transform(train, device)
+    *,
+    refits: int | None = None,
+) -> tuple[float, list[np.ndarray]]:
+    identified = train.filter(pl.col("voter_id").is_not_null())
+    voter_ids = identified["voter_id"].unique().sort().to_list()
+    if len(voter_ids) < 2:
+        return 0.0, []
+    image_ids = sorted(
+        set(train["left_image_id"].to_list()) | set(train["right_image_id"].to_list())
+    )
+    reference_encoder = VoteEncoder(image_ids=image_ids, voter_ids=voter_ids)
+    reference = reference_encoder.transform(identified, device)
+    rng = np.random.default_rng(config["project"]["seed"] + 88000)
     labels = []
-    refits = max(1, config["gates"]["stability_refits"])
-    for index in range(refits):
-        set_deterministic(config["project"]["seeds"][index % len(config["project"]["seeds"])])
+    utilities = []
+    refit_count = max(
+        1,
+        int(config["gates"]["stability_refits"] if refits is None else refits),
+    )
+    for index in range(refit_count):
+        sampled = rng.choice(voter_ids, len(voter_ids), replace=True)
+        unique, counts = np.unique(sampled, return_counts=True)
+        multiplicity = pl.DataFrame(
+            {"voter_id": unique.tolist(), "_bootstrap_count": counts.tolist()}
+        )
+        bootstrap = (
+            identified.join(multiplicity, on="voter_id", how="inner")
+            .with_columns(pl.int_ranges(0, pl.col("_bootstrap_count")).alias("_copy"))
+            .explode("_copy")
+            .with_columns(
+                (
+                    pl.col("voter_id").cast(pl.String)
+                    + pl.lit("#")
+                    + pl.col("_copy").cast(pl.String)
+                ).alias("voter_id")
+            )
+            .drop("_bootstrap_count", "_copy")
+        )
+        bootstrap_voters = bootstrap["voter_id"].unique().sort().to_list()
+        encoder = VoteEncoder(image_ids=image_ids, voter_ids=bootstrap_voters)
+        encoded = encoder.transform(bootstrap, device)
+        set_deterministic(
+            config["project"]["seeds"][index % len(config["project"]["seeds"])]
+        )
         model = MixtureDavidsonModel.fit(
             encoded,
             classes=classes,
             l2=l2,
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
             dirichlet_alpha=config["models"]["dirichlet_alpha"],
-            epochs=max(20, config["models"]["epochs"] // 2),
-            learning_rate=config["models"]["learning_rate"],
-            patience=config["models"]["patience"],
+            **_selection_training_kwargs(config),
         )
-        labels.append(model.posterior.argmax(1))
+        posterior = model.infer_posterior(
+            reference, n_voters=len(voter_ids), use_response_styles=False
+        )
+        labels.append(posterior.argmax(1))
+        utilities.append(model.utilities())
     if len(labels) < 2:
-        return 1.0
+        return 1.0, utilities
     values = [
         adjusted_rand_score(labels[i], labels[j])
         for i in range(len(labels))
         for j in range(i + 1, len(labels))
     ]
-    return float(np.median(values))
+    return float(np.median(values)), utilities
 
 
 def _save_model_tables(config: dict[str, Any], dimension: str, models: dict[str, Any]) -> None:
@@ -677,25 +1051,58 @@ def _save_model_tables(config: dict[str, Any], dimension: str, models: dict[str,
     pl.DataFrame(voter_payload).write_csv(tables / f"{dimension}_latent_classes.csv")
 
 
-def _full_mixture(
+def _cross_fitted_mixture_utilities(
     frame: pl.DataFrame,
     classes: int,
+    l2: float,
+    baseline: dict[str, Any],
     config: dict[str, Any],
     device: torch.device,
-) -> tuple[VoteEncoder, MixtureDavidsonModel]:
-    encoder = VoteEncoder().fit(frame)
-    encoded = encoder.transform(frame, device)
-    set_deterministic(config["project"]["seed"])
-    model = MixtureDavidsonModel.fit(
-        encoded,
-        classes=classes,
-        l2=config["models"]["l2_candidates"][0],
-        dirichlet_alpha=config["models"]["dirichlet_alpha"],
-        epochs=config["models"]["epochs"],
-        learning_rate=config["models"]["learning_rate"],
-        patience=config["models"]["patience"],
-    )
-    return encoder, model
+) -> tuple[list[str], np.ndarray]:
+    fitted: list[tuple[list[str], np.ndarray]] = []
+    reference = None
+    for fold in range(config["splits"]["outer_folds"]):
+        train = frame.filter(pl.col("edge_fold") != fold)
+        if train.height < 20:
+            continue
+        encoder = VoteEncoder().fit(train)
+        encoded = encoder.transform(train, device)
+        model = _best_mixture_fit(
+            encoded,
+            config,
+            baseline,
+            classes,
+            l2,
+            config["project"]["seed"] + 90000 + fold * 100,
+            selection=False,
+        )
+        values = model.utilities()
+        if reference is None:
+            reference = values
+        else:
+            common = sorted(set(encoder.image_ids) & set(fitted[0][0]))
+            current_lookup = {image: i for i, image in enumerate(encoder.image_ids)}
+            reference_lookup = {image: i for i, image in enumerate(fitted[0][0])}
+            current_common = values[:, [current_lookup[x] for x in common]]
+            reference_common = reference[:, [reference_lookup[x] for x in common]]
+            correlation = np.nan_to_num(
+                np.corrcoef(current_common, reference_common)[:classes, classes:]
+            )
+            from scipy.optimize import linear_sum_assignment
+
+            rows, cols = linear_sum_assignment(-correlation)
+            aligned = np.empty_like(values)
+            aligned[cols] = values[rows]
+            values = aligned
+        fitted.append((encoder.image_ids, values))
+    if not fitted:
+        raise RuntimeError("No evaluable cross-fitted mixture folds")
+    common_images = sorted(set.intersection(*(set(images) for images, _ in fitted)))
+    fold_values = []
+    for images, values in fitted:
+        lookup = {image: i for i, image in enumerate(images)}
+        fold_values.append(values[:, [lookup[image] for image in common_images]])
+    return common_images, np.mean(fold_values, axis=0)
 
 
 def run_cusp_stage(
@@ -705,15 +1112,33 @@ def run_cusp_stage(
     if primary_result["verdict"] != "SCALAR_REJECTED_MIXTURE":
         return primary_result["verdict"], {"status": "skipped", "reason": "mixture_gate_failed"}
     votes = pl.read_parquet(Path(config["data"]["processed_dir"]) / "votes.parquet")
+    splits = pl.read_parquet(Path(config["data"]["processed_dir"]) / "splits.parquet")
+    votes = votes.join(splits, on="vote_id")
     device = select_device(config["project"]["device"])
-    classes = primary_result["selected_classes"]
     fitted = {}
     for dimension in DIMENSIONS:
         frame = votes.filter(pl.col("dimension") == dimension)
-        fitted[dimension] = _full_mixture(frame, classes, config, device)
-    common_images = set(fitted["safety"][0].image_ids)
-    for encoder, _ in fitted.values():
-        common_images &= set(encoder.image_ids)
+        metrics_path = _artifacts(config, "metrics") / f"{dimension}_model_comparison.json"
+        if not metrics_path.exists():
+            return "SCALAR_REJECTED_MIXTURE", {
+                "status": "skipped",
+                "reason": f"missing_cross_fitted_metrics:{dimension}",
+            }
+        dimension_result = json.loads(metrics_path.read_text("utf-8"))
+        classes = dimension_result["selected_classes"]
+        selections = dimension_result["outer_fold_selections"]
+        mixture_l2 = mode(
+            item["mixture_l2"]
+            for item in selections
+            if item["mixture_classes"] == classes
+        )
+        baseline = dimension_result["selected_baseline"]
+        fitted[dimension] = _cross_fitted_mixture_utilities(
+            frame, classes, mixture_l2, baseline, config, device
+        )
+    common_images = set(fitted["safety"][0])
+    for images, _ in fitted.values():
+        common_images &= set(images)
     common = sorted(common_images)
     if len(common) < config["bimodality"]["min_neighbors"]:
         return "SCALAR_REJECTED_MIXTURE", {
@@ -722,9 +1147,9 @@ def run_cusp_stage(
             "images": len(common),
         }
     utilities = {}
-    for dimension, (encoder, model) in fitted.items():
-        lookup = {image: i for i, image in enumerate(encoder.image_ids)}
-        utilities[dimension] = model.utilities()[:, [lookup[image] for image in common]]
+    for dimension, (images, values) in fitted.items():
+        lookup = {image: i for i, image in enumerate(images)}
+        utilities[dimension] = values[:, [lookup[image] for image in common]]
     other = [d for d in DIMENSIONS if d != "safety"]
     mean_features, variance_features = [], []
     for dimension in other:
@@ -737,6 +1162,7 @@ def run_cusp_stage(
     alpha = PCA(1, random_state=config["project"]["seed"]).fit_transform(mean_matrix).ravel()
     beta = PCA(1, random_state=config["project"]["seed"]).fit_transform(variance_matrix).ravel()
     safety = utilities["safety"]
+    classes = safety.shape[0]
     y = safety.ravel()
     alpha_rows = np.tile(alpha, classes)
     beta_rows = np.tile(beta, classes)
@@ -798,13 +1224,54 @@ def run_all(config: dict[str, Any], *, resume: bool = False) -> dict[str, Any]:
         build_report(config)
         return {"verdict": "DATA_INSUFFICIENT", "reasons": validation["reasons"]}
     prepare_data(config)
-    simulation = validate_density_recovery(config)
-    if simulation["status"] != "ok":
+    write_run_manifest(
+        config,
+        [
+            config["data"]["votes_file"],
+            Path(config["data"]["processed_dir"]) / "votes.parquet",
+            Path(config["data"]["processed_dir"]) / "splits.parquet",
+            Path(config["data"]["processed_dir"]) / "data_validation.json",
+        ],
+    )
+    calibration_root = config["simulation"].get("calibration_artifacts")
+    calibration_metrics = (
+        Path(calibration_root) if calibration_root else _artifacts(config, "metrics")
+    )
+    model_recovery_path = calibration_metrics / "model_recovery.json"
+    density_recovery_path = calibration_metrics / "simulation_recovery.json"
+    if calibration_root and (
+        not model_recovery_path.exists() or not density_recovery_path.exists()
+    ):
+        raise RuntimeError(
+            f"Frozen calibration artifacts are missing from {calibration_metrics}"
+        )
+    model_simulation = (
+        json.loads(model_recovery_path.read_text("utf-8"))
+        if (resume or calibration_root) and model_recovery_path.exists()
+        else validate_model_recovery(config)
+    )
+    density_simulation = (
+        json.loads(density_recovery_path.read_text("utf-8"))
+        if (resume or calibration_root) and density_recovery_path.exists()
+        else validate_density_recovery(config)
+    )
+    simulation = {
+        "model_recovery": model_simulation,
+        "density_recovery": density_simulation,
+    }
+    simulation_ok = (
+        model_simulation["status"] == "ok" and density_simulation["status"] == "ok"
+    )
+    config["_simulation_ok"] = simulation_ok
+    if not simulation_ok:
         write_verdict(
-            config, "SCALAR_NOT_REJECTED", reasons=["simulation_calibration_failed"], metrics=simulation
+            config,
+            "MODEL_CALIBRATION_FAILED",
+            reasons=["simulation_calibration_failed"],
+            metrics=simulation,
         )
         build_report(config)
-        return {"verdict": "SCALAR_NOT_REJECTED", "simulation": simulation}
+        return {"verdict": "MODEL_CALIBRATION_FAILED", "simulation": simulation}
     primary, _ = run_dimension(
         config,
         config["data"]["primary_dimension"],

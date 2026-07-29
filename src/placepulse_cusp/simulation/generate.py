@@ -34,7 +34,14 @@ def generate_vote_table(
     voters = np.asarray([f"voter_{i:05d}" for i in range(n_voters)])
     images = np.asarray([f"image_{i:05d}" for i in range(n_images)])
     classes = rng.choice(3, n_voters, p=[0.48, 0.34, 0.18])
-    base = {dimension: rng.normal(0, 1, n_images) for dimension in DIMENSIONS}
+    base = {
+        dimension: (
+            np.zeros(n_images)
+            if mechanism == "null"
+            else rng.normal(0, 1, n_images)
+        )
+        for dimension in DIMENSIONS
+    }
     class_shift = rng.normal(0, 0.7, (3, n_images))
     rows = []
     start = datetime(2015, 1, 1, tzinfo=timezone.utc)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 
 def log_score(probabilities: np.ndarray, choices: np.ndarray) -> np.ndarray:
@@ -57,4 +58,70 @@ def ranking_reversal_fraction(utilities: np.ndarray, max_pairs: int = 200000) ->
     signs = np.sign(utilities[:, left] - utilities[:, right])
     reversals = np.any(signs != signs[0:1], axis=0)
     return float(reversals.mean()) if len(reversals) else 0.0
+
+
+def bootstrap_reversal_evidence(
+    bootstrap_utilities: list[np.ndarray],
+    image_counts: np.ndarray,
+    *,
+    min_image_votes: int = 20,
+    min_probability: float = 0.90,
+    min_standardized_gap: float = 0.5,
+    max_pairs: int = 200000,
+    seed: int = 1103,
+) -> dict[str, float | int]:
+    """Estimate reliable class ranking reversals across voter-bootstrap refits."""
+    if len(bootstrap_utilities) < 2:
+        return {"fraction": 0.0, "eligible_pairs": 0, "reliable_reversals": 0}
+    reference = bootstrap_utilities[0]
+    aligned = []
+    for current in bootstrap_utilities:
+        correlation = np.nan_to_num(
+            np.corrcoef(current, reference)[: current.shape[0], current.shape[0] :]
+        )
+        rows, cols = linear_sum_assignment(-correlation)
+        value = np.empty_like(current)
+        value[cols] = current[rows]
+        aligned.append(value)
+    draws = np.stack(aligned)
+    eligible_images = np.flatnonzero(image_counts >= min_image_votes)
+    if len(eligible_images) < 2:
+        return {"fraction": 0.0, "eligible_pairs": 0, "reliable_reversals": 0}
+    rng = np.random.default_rng(seed)
+    total = len(eligible_images) * (len(eligible_images) - 1) // 2
+    count = min(total, max_pairs)
+    if total <= max_pairs:
+        pair_index = np.triu_indices(len(eligible_images), 1)
+        left = eligible_images[pair_index[0]]
+        right = eligible_images[pair_index[1]]
+    else:
+        left = rng.choice(eligible_images, count)
+        right = rng.choice(eligible_images, count)
+        equal = left == right
+        while equal.any():
+            right[equal] = rng.choice(eligible_images, int(equal.sum()))
+            equal = left == right
+    deltas = draws[:, :, left] - draws[:, :, right]
+    shared_delta = deltas.mean(axis=1)
+    direction_probability = np.maximum(
+        (shared_delta > 0).mean(axis=0), (shared_delta < 0).mean(axis=0)
+    )
+    scale = max(float(draws.mean(axis=1).std()), 1e-12)
+    gap = np.abs(shared_delta.mean(axis=0)) / scale
+    informative = (direction_probability >= min_probability) & (
+        gap >= min_standardized_gap
+    )
+    if not informative.any():
+        return {"fraction": 0.0, "eligible_pairs": 0, "reliable_reversals": 0}
+    signs = np.sign(deltas)
+    reversed_draw = np.any(signs != signs[:, 0:1, :], axis=1)
+    reversal_probability = reversed_draw.mean(axis=0)
+    reliable = informative & (reversal_probability >= min_probability)
+    eligible_count = int(informative.sum())
+    reliable_count = int(reliable.sum())
+    return {
+        "fraction": reliable_count / eligible_count,
+        "eligible_pairs": eligible_count,
+        "reliable_reversals": reliable_count,
+    }
 

@@ -76,3 +76,4 @@ simulation:
   cusp_max_mixture_false_positive: 0.50
 reporting:
   artifacts_dir: artifacts/smoke
+  run_label: smoke
