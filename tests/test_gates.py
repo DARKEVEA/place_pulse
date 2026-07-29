@@ -1,5 +1,5 @@
 from placepulse_cusp.config import load_config
-from placepulse_cusp.evaluation.gates import heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
 
 
 def _verdict(*, m0=1.0, scalar=0.9, simulation=True, boundary=False):
@@ -33,3 +33,19 @@ def test_simulation_or_search_boundary_fails_calibration():
     assert _verdict(simulation=False)[0] == "MODEL_CALIBRATION_FAILED"
     assert _verdict(boundary=True)[0] == "MODEL_CALIBRATION_FAILED"
 
+
+def test_edge_gates_can_be_checked_before_auxiliary_refits():
+    config = load_config("configs/smoke.yaml")
+    gates = edge_predictive_gates(
+        config,
+        1.0,
+        0.9,
+        0.8,
+        1.0,
+        {"mean": 0.1, "lower": 0.01, "upper": 0.2},
+        {"mean": -0.1, "lower": -0.2, "upper": 0.0},
+        {"mean": 0.1, "lower": 0.01, "upper": 0.2},
+    )
+    assert gates["baseline"]
+    assert gates["continuous"]
+    assert not gates["mixture"]

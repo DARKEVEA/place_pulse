@@ -84,8 +84,10 @@ def _write_manuscript_sections(report_dir: Path, verdict: dict[str, Any]) -> Non
     (report_dir / "methods.md").write_text(
         "# Methods\n\n"
         "原始 left/right/equal 比较使用 Davidson 三分类似然建模。共享标量、连续偏好和"
-        "潜在类别模型在固定外层留出上比较；只有异质性与条件双峰门控通过后才比较 stochastic "
-        "CUSP、线性高斯、样条高斯和混合专家密度。\n",
+        "潜在类别模型在固定外层留出上比较。内层选择首先以单随机起点的短 Adam 拟合筛选"
+        "全部候选，再对排名靠前的候选使用完整 Adam 预算及预设的全部随机起点；L-BFGS "
+        "仅用于最终入选规格。只有异质性与条件双峰门控通过后才比较 stochastic CUSP、"
+        "线性高斯、样条高斯和混合专家密度。\n",
         "utf-8",
     )
     (report_dir / "limitations.md").write_text(
@@ -94,4 +96,3 @@ def _write_manuscript_sections(report_dir: Path, verdict: dict[str, Any]) -> Non
         "个体状态跳变或真实时间动力学；本实验也不检验完全未见图像的视觉泛化。\n",
         "utf-8",
     )
-

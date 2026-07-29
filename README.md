@@ -91,6 +91,14 @@ ppc run all --config configs/revised_validation_cuda.yaml
 first run informed the method changes. A new or independent dataset is
 required for a future confirmatory claim.
 
+To keep the configured search space intact without fitting every weak candidate
+five times, inner selection uses a deterministic multi-fidelity policy. Every
+rank/L2 or class-count/L2 candidate receives one short Adam fit; the best
+`random_starts` candidates are then re-evaluated with the full configured Adam
+budget and all configured random starts. L-BFGS is reserved for the final
+selected specification. The same policy is used in simulation calibration and
+real-data analysis.
+
 ## GPU execution
 
 Explicit MPS and CUDA profiles are provided. They fail if the requested

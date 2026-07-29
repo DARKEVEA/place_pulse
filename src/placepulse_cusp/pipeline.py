@@ -22,7 +22,7 @@ from placepulse_cusp.cusp.compare import compare_density_models
 from placepulse_cusp.data.schema import standardise_votes
 from placepulse_cusp.data.splits import grouped_edge_folds, prepare_data
 from placepulse_cusp.data.validate import validate_votes
-from placepulse_cusp.evaluation.gates import heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
 from placepulse_cusp.evaluation.metrics import (
     bootstrap_reversal_evidence,
     clustered_elpd_bootstrap,
@@ -45,7 +45,7 @@ from placepulse_cusp.simulation.recovery import (
     validate_model_recovery,
 )
 
-RESULT_SCHEMA_VERSION = 4
+RESULT_SCHEMA_VERSION = 5
 
 
 def _artifacts(config: dict[str, Any], kind: str) -> Path:
@@ -352,15 +352,42 @@ def _inner_edge_splits(
 def _selection_training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     kwargs = _training_kwargs(config)
     kwargs["epochs"] = max(20, config["models"]["epochs"] // 2)
+    # L-BFGS repeatedly evaluates a full-data closure and is intended for the
+    # final selected specification. Adam is sufficient for coarse candidate
+    # ranking; the winning model is still polished with the configured steps.
+    kwargs["lbfgs_steps"] = 0
     return kwargs
+
+
+def _screening_training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    """Low-fidelity budget used only to form a candidate shortlist."""
+    kwargs = _selection_training_kwargs(config)
+    kwargs["epochs"] = max(20, kwargs["epochs"] // 3)
+    return kwargs
+
+
+def _encoded_inner_edge_splits(
+    train: pl.DataFrame,
+    config: dict[str, Any],
+    device: torch.device,
+    seed_offset: int,
+) -> list[tuple[Any, Any]]:
+    """Encode each inner split once and reuse it across all model candidates."""
+    result = []
+    for inner_train, validation in _inner_edge_splits(train, config, seed_offset):
+        encoder = VoteEncoder().fit(inner_train)
+        result.append(
+            (encoder.transform(inner_train, device), encoder.transform(validation, device))
+        )
+    return result
 
 
 def _select_scalar_baseline(
     train: pl.DataFrame, config: dict[str, Any], device: torch.device
 ) -> dict[str, Any]:
-    splits = _inner_edge_splits(train, config, 41)
+    encoded = _encoded_inner_edge_splits(train, config, device, 41)
     candidates = config["models"]["l2_candidates"]
-    if not splits:
+    if not encoded:
         return {
             "name": "m1a",
             "utility_l2": candidates[0],
@@ -369,12 +396,6 @@ def _select_scalar_baseline(
             "selection_boundary": True,
         }
     m1a_scores: dict[float, list[float]] = {float(x): [] for x in candidates}
-    encoded = []
-    for inner_train, validation in splits:
-        encoder = VoteEncoder().fit(inner_train)
-        encoded.append(
-            (encoder.transform(inner_train, device), encoder.transform(validation, device))
-        )
     for utility_l2 in candidates:
         for fold, (encoded_train, encoded_val) in enumerate(encoded):
             set_deterministic(config["project"]["seed"] + 410 + fold)
@@ -430,10 +451,22 @@ def _select_scalar_baseline(
 
 
 def _best_continuous_fit(
-    encoded_train, config, baseline, rank, l2, seed, *, selection: bool = True
+    encoded_train,
+    config,
+    baseline,
+    rank,
+    l2,
+    seed,
+    *,
+    selection: bool = True,
+    starts: int | None = None,
+    screening: bool = False,
 ):
     best = None
-    for start in range(max(1, int(config["models"].get("random_starts", 1)))):
+    start_count = (
+        config["models"].get("random_starts", 1) if starts is None else starts
+    )
+    for start in range(max(1, int(start_count))):
         set_deterministic(seed + start)
         model = ContinuousPreferenceModel.fit(
             encoded_train,
@@ -442,7 +475,15 @@ def _best_continuous_fit(
             utility_l2=baseline["utility_l2"],
             style_l2=baseline["style_l2"],
             response_styles=baseline["response_styles"],
-            **(_selection_training_kwargs(config) if selection else _training_kwargs(config)),
+            **(
+                _screening_training_kwargs(config)
+                if screening
+                else (
+                    _selection_training_kwargs(config)
+                    if selection
+                    else _training_kwargs(config)
+                )
+            ),
         )
         if best is None or model.history[-1] < best.history[-1]:
             best = model
@@ -455,37 +496,67 @@ def _select_continuous(
     device: torch.device,
     baseline: dict[str, Any],
 ) -> tuple[int, float]:
-    splits = _inner_edge_splits(train, config, 91)
-    if not splits:
+    encoded = _encoded_inner_edge_splits(train, config, device, 91)
+    if not encoded:
         return config["models"]["continuous_dimensions"][0], config["models"]["l2_candidates"][0]
-    scores = {}
-    for rank in config["models"]["continuous_dimensions"]:
-        for l2 in config["models"]["l2_candidates"]:
-            values = []
-            for fold, (inner_train, validation) in enumerate(splits):
-                encoder = VoteEncoder().fit(inner_train)
-                encoded_train = encoder.transform(inner_train, device)
-                encoded_val = encoder.transform(validation, device)
-                model = _best_continuous_fit(
-                    encoded_train,
-                    config,
-                    baseline,
-                    rank,
-                    l2,
-                    config["project"]["seed"] + 9100 + fold * 100,
-                )
-                values.append(
-                    cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
-                )
-            scores[(rank, float(l2))] = float(np.mean(values))
+    candidates = [
+        (rank, float(l2))
+        for rank in config["models"]["continuous_dimensions"]
+        for l2 in config["models"]["l2_candidates"]
+    ]
+    starts = max(1, int(config["models"].get("random_starts", 1)))
+
+    def evaluate(candidate, candidate_starts: int, *, screening: bool = False) -> float:
+        rank, l2 = candidate
+        values = []
+        for fold, (encoded_train, encoded_val) in enumerate(encoded):
+            model = _best_continuous_fit(
+                encoded_train,
+                config,
+                baseline,
+                rank,
+                l2,
+                config["project"]["seed"] + 9100 + fold * 100,
+                starts=candidate_starts,
+                screening=screening,
+            )
+            values.append(
+                cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+            )
+        return float(np.mean(values))
+
+    # When the grid is larger than the requested number of starts, use one
+    # deterministic start for every candidate, then spend the full multi-start
+    # budget only on the best candidates. Small grids retain exhaustive search.
+    if starts > 1 and len(candidates) > starts:
+        screening_scores = {
+            candidate: evaluate(candidate, 1, screening=True)
+            for candidate in candidates
+        }
+        shortlist = sorted(screening_scores, key=screening_scores.get)[:starts]
+        scores = {candidate: evaluate(candidate, starts) for candidate in shortlist}
+    else:
+        scores = {candidate: evaluate(candidate, starts) for candidate in candidates}
     return min(scores, key=scores.get)
 
 
 def _best_mixture_fit(
-    encoded_train, config, baseline, classes, l2, seed, *, selection: bool = True
+    encoded_train,
+    config,
+    baseline,
+    classes,
+    l2,
+    seed,
+    *,
+    selection: bool = True,
+    starts: int | None = None,
+    screening: bool = False,
 ):
     best = None
-    for start in range(max(1, int(config["models"].get("random_starts", 1)))):
+    start_count = (
+        config["models"].get("random_starts", 1) if starts is None else starts
+    )
+    for start in range(max(1, int(start_count))):
         set_deterministic(seed + start)
         model = MixtureDavidsonModel.fit(
             encoded_train,
@@ -495,7 +566,15 @@ def _best_mixture_fit(
             style_l2=baseline["style_l2"],
             response_styles=baseline["response_styles"],
             dirichlet_alpha=config["models"]["dirichlet_alpha"],
-            **(_selection_training_kwargs(config) if selection else _training_kwargs(config)),
+            **(
+                _screening_training_kwargs(config)
+                if screening
+                else (
+                    _selection_training_kwargs(config)
+                    if selection
+                    else _training_kwargs(config)
+                )
+            ),
         )
         if best is None or model.history[-1] < best.history[-1]:
             best = model
@@ -508,29 +587,44 @@ def _select_mixture(
     device: torch.device,
     baseline: dict[str, Any],
 ) -> tuple[int, float]:
-    splits = _inner_edge_splits(train, config, 193)
-    if not splits:
+    encoded = _encoded_inner_edge_splits(train, config, device, 193)
+    if not encoded:
         return config["models"]["mixture_classes"][0], config["models"]["l2_candidates"][0]
-    scores = {}
-    for classes in config["models"]["mixture_classes"]:
-        for l2 in config["models"]["l2_candidates"]:
-            values = []
-            for fold, (inner_train, validation) in enumerate(splits):
-                encoder = VoteEncoder().fit(inner_train)
-                encoded_train = encoder.transform(inner_train, device)
-                encoded_val = encoder.transform(validation, device)
-                model = _best_mixture_fit(
-                    encoded_train,
-                    config,
-                    baseline,
-                    classes,
-                    l2,
-                    config["project"]["seed"] + 19300 + fold * 100,
-                )
-                values.append(
-                    cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
-                )
-            scores[(classes, float(l2))] = float(np.mean(values))
+    candidates = [
+        (classes, float(l2))
+        for classes in config["models"]["mixture_classes"]
+        for l2 in config["models"]["l2_candidates"]
+    ]
+    starts = max(1, int(config["models"].get("random_starts", 1)))
+
+    def evaluate(candidate, candidate_starts: int, *, screening: bool = False) -> float:
+        classes, l2 = candidate
+        values = []
+        for fold, (encoded_train, encoded_val) in enumerate(encoded):
+            model = _best_mixture_fit(
+                encoded_train,
+                config,
+                baseline,
+                classes,
+                l2,
+                config["project"]["seed"] + 19300 + fold * 100,
+                starts=candidate_starts,
+                screening=screening,
+            )
+            values.append(
+                cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
+            )
+        return float(np.mean(values))
+
+    if starts > 1 and len(candidates) > starts:
+        screening_scores = {
+            candidate: evaluate(candidate, 1, screening=True)
+            for candidate in candidates
+        }
+        shortlist = sorted(screening_scores, key=screening_scores.get)[:starts]
+        scores = {candidate: evaluate(candidate, starts) for candidate in shortlist}
+    else:
+        scores = {candidate: evaluate(candidate, starts) for candidate in candidates}
     return min(scores, key=scores.get)
 
 
@@ -833,6 +927,18 @@ def run_dimension(
         repetitions=config["gates"]["elpd_bootstrap"],
         seed=config["project"]["seed"] + 2,
     )
+    edge_gates = edge_predictive_gates(
+        config,
+        m0_ce,
+        scalar_ce,
+        continuous_ce,
+        mixture_ce,
+        continuous_ci,
+        mixture_ci,
+        scalar_vs_m0_ci,
+        simulation_ok=config.get("_simulation_ok", True),
+        selection_boundary=baseline["selection_boundary"],
+    )
     # Refit the selected specification on all observations only after every
     # outer-fold score has been frozen. These models produce descriptive tables,
     # never outer-fold predictive metrics.
@@ -872,37 +978,59 @@ def run_dimension(
         "train": frame,
     }
     raw_reversal = ranking_reversal_fraction(mixture.utilities())
-    stability, stability_models = _mixture_stability(
-        frame, selected_classes, mixture_l2, baseline, config, device
-    )
-    image_counts_lookup = {}
-    for column in ("left_image_id", "right_image_id"):
-        for image, count in frame.group_by(column).len().iter_rows():
-            image_counts_lookup[image] = image_counts_lookup.get(image, 0) + count
-    image_counts = np.asarray(
-        [image_counts_lookup.get(image, 0) for image in final_encoder.image_ids]
-    )
-    reversal_evidence = bootstrap_reversal_evidence(
-        stability_models,
-        image_counts,
-        min_image_votes=config["gates"].get("min_image_votes", 20),
-        min_probability=config["gates"]["min_reversal_probability"],
-        min_standardized_gap=config["gates"].get(
-            "min_standardized_utility_gap", 0.5
-        ),
-        seed=config["project"]["seed"],
-    )
+    if edge_gates["baseline"] and edge_gates["mixture"]:
+        stability, stability_models = _mixture_stability(
+            frame, selected_classes, mixture_l2, baseline, config, device
+        )
+        image_counts_lookup = {}
+        for column in ("left_image_id", "right_image_id"):
+            for image, count in frame.group_by(column).len().iter_rows():
+                image_counts_lookup[image] = image_counts_lookup.get(image, 0) + count
+        image_counts = np.asarray(
+            [image_counts_lookup.get(image, 0) for image in final_encoder.image_ids]
+        )
+        reversal_evidence = bootstrap_reversal_evidence(
+            stability_models,
+            image_counts,
+            min_image_votes=config["gates"].get("min_image_votes", 20),
+            min_probability=config["gates"]["min_reversal_probability"],
+            min_standardized_gap=config["gates"].get(
+                "min_standardized_utility_gap", 0.5
+            ),
+            seed=config["project"]["seed"],
+        )
+    else:
+        stability, stability_models = 0.0, []
+        reversal_evidence = {
+            "fraction": 0.0,
+            "eligible_pairs": 0,
+            "reliable_reversals": 0,
+            "status": "skipped",
+            "reason": "mixture_edge_gate_failed",
+        }
     reversal = float(reversal_evidence["fraction"])
-    auxiliary = _evaluate_auxiliary_holdouts(
-        frame,
-        config,
-        device,
-        baseline=baseline,
-        rank=selected_rank,
-        continuous_l2=selected_l2,
-        classes=selected_classes,
-        mixture_l2=mixture_l2,
-    )
+    if edge_gates["baseline"] and (
+        edge_gates["continuous"] or edge_gates["mixture"]
+    ):
+        auxiliary = _evaluate_auxiliary_holdouts(
+            frame,
+            config,
+            device,
+            baseline=baseline,
+            rank=selected_rank,
+            continuous_l2=selected_l2,
+            classes=selected_classes,
+            mixture_l2=mixture_l2,
+        )
+    else:
+        auxiliary = {
+            "status": "skipped",
+            "reason": "heterogeneity_edge_gates_failed",
+            "voter_holdout": {"status": "skipped"},
+            "time_holdout": {"status": "skipped"},
+            "continuous_auxiliary_gate": False,
+            "mixture_auxiliary_gate": False,
+        }
     verdict, gates = heterogeneity_verdict(
         config,
         m0_ce,

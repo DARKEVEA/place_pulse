@@ -10,7 +10,7 @@ from sklearn.metrics import adjusted_rand_score
 
 from placepulse_cusp.cusp.density import CuspDensity, MixtureExpertDensity
 from placepulse_cusp.data.splits import grouped_edge_folds
-from placepulse_cusp.evaluation.gates import heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
 from placepulse_cusp.evaluation.metrics import (
     clustered_elpd_bootstrap,
     empirical_probabilities,
@@ -246,15 +246,30 @@ def _model_recovery_once(
         predicted = final_mixture.posterior.argmax(1)
         actual = np.asarray([truth[x] for x in final_encoder.voter_ids])
         truth_ari = float(adjusted_rand_score(actual, predicted))
-    bootstrap_stability, _ = _mixture_stability(
-        frame,
-        classes,
-        mixture_l2,
-        baseline,
+    edge_gates = edge_predictive_gates(
         config,
-        device,
-        refits=config["simulation"].get("stability_refits", 5),
+        float(-values["m0"].mean()),
+        float(-values["scalar"].mean()),
+        float(-values["continuous"].mean()),
+        float(-values["mixture"].mean()),
+        continuous_ci,
+        mixture_ci,
+        scalar_ci,
+        simulation_ok=True,
+        selection_boundary=baseline.get("selection_boundary", False),
     )
+    if edge_gates["baseline"] and edge_gates["mixture"]:
+        bootstrap_stability, _ = _mixture_stability(
+            frame,
+            classes,
+            mixture_l2,
+            baseline,
+            config,
+            device,
+            refits=config["simulation"].get("stability_refits", 5),
+        )
+    else:
+        bootstrap_stability = 0.0
     verdict, gates = heterogeneity_verdict(
         config,
         float(-values["m0"].mean()),
@@ -360,4 +375,3 @@ def validate_model_recovery(config: dict[str, Any]) -> dict[str, Any]:
     )
     write_json(target, result)
     return result
-
