@@ -1,0 +1,211 @@
+{
+  "result_schema_version": 3,
+  "dimension": "depressing",
+  "verdict": "SCALAR_NOT_REJECTED",
+  "selected_rank": 1,
+  "selected_classes": 5,
+  "outer_fold_selections": [
+    {
+      "fold": 0,
+      "continuous_rank": 1,
+      "continuous_l2": 0.01,
+      "mixture_classes": 3,
+      "mixture_l2": 0.01
+    },
+    {
+      "fold": 1,
+      "continuous_rank": 1,
+      "continuous_l2": 0.01,
+      "mixture_classes": 5,
+      "mixture_l2": 0.01
+    },
+    {
+      "fold": 2,
+      "continuous_rank": 1,
+      "continuous_l2": 0.01,
+      "mixture_classes": 4,
+      "mixture_l2": 0.01
+    },
+    {
+      "fold": 3,
+      "continuous_rank": 1,
+      "continuous_l2": 0.01,
+      "mixture_classes": 4,
+      "mixture_l2": 0.01
+    },
+    {
+      "fold": 4,
+      "continuous_rank": 1,
+      "continuous_l2": 0.01,
+      "mixture_classes": 5,
+      "mixture_l2": 0.01
+    }
+  ],
+  "folds": [
+    {
+      "fold": 0,
+      "train_votes": 126949,
+      "test_votes": 22401,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 3,
+      "continuous_l2": 0.01,
+      "mixture_l2": 0.01,
+      "m0_cross_entropy": 0.9989444921138992,
+      "scalar_cross_entropy": 1.4533159732818604,
+      "continuous_cross_entropy": 2.843172073364258,
+      "mixture_cross_entropy": 1.5927549600601196
+    },
+    {
+      "fold": 1,
+      "train_votes": 126814,
+      "test_votes": 22536,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 5,
+      "continuous_l2": 0.01,
+      "mixture_l2": 0.01,
+      "m0_cross_entropy": 1.0068184158328106,
+      "scalar_cross_entropy": 1.4368140697479248,
+      "continuous_cross_entropy": 2.852877140045166,
+      "mixture_cross_entropy": 1.5018439292907715
+    },
+    {
+      "fold": 2,
+      "train_votes": 126849,
+      "test_votes": 22501,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 4,
+      "continuous_l2": 0.01,
+      "mixture_l2": 0.01,
+      "m0_cross_entropy": 1.0013490341377322,
+      "scalar_cross_entropy": 1.4575927257537842,
+      "continuous_cross_entropy": 2.8429434299468994,
+      "mixture_cross_entropy": 1.516409158706665
+    },
+    {
+      "fold": 3,
+      "train_votes": 126847,
+      "test_votes": 22503,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 4,
+      "continuous_l2": 0.01,
+      "mixture_l2": 0.01,
+      "m0_cross_entropy": 1.0003020784751824,
+      "scalar_cross_entropy": 1.4333951473236084,
+      "continuous_cross_entropy": 2.798715353012085,
+      "mixture_cross_entropy": 1.515316367149353
+    },
+    {
+      "fold": 4,
+      "train_votes": 126815,
+      "test_votes": 22535,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 5,
+      "continuous_l2": 0.01,
+      "mixture_l2": 0.01,
+      "m0_cross_entropy": 0.9976475303963079,
+      "scalar_cross_entropy": 1.445312738418579,
+      "continuous_cross_entropy": 2.82206392288208,
+      "mixture_cross_entropy": 1.5228228569030762
+    }
+  ],
+  "scalar_cross_entropy": 1.445276141166687,
+  "continuous_cross_entropy": 2.8319475650787354,
+  "mixture_cross_entropy": 1.5297625064849854,
+  "continuous_elpd_ci": {
+    "mean": -1.3866711854934692,
+    "lower": -1.4599963843822479,
+    "upper": -1.306082871556282
+  },
+  "mixture_elpd_ci": {
+    "mean": -0.084486223757267,
+    "lower": -0.09806120637804269,
+    "upper": -0.06953592952340841
+  },
+  "class_weights": [
+    0.15410441160202026,
+    0.12595577538013458,
+    0.020426888018846512,
+    0.35284385085105896,
+    0.3466690480709076
+  ],
+  "ranking_reversal_fraction": 0.7220258303874558,
+  "stability_ari": 0.19193139645354054,
+  "auxiliary_holdouts": {
+    "voter_holdout": {
+      "status": "ok",
+      "label": "voter_holdout",
+      "test_votes": 111700,
+      "coverage": 0.7483413602833765,
+      "continuous_elpd_ci": {
+        "mean": 0.3688095211982727,
+        "lower": 0.3598251029849052,
+        "upper": 0.38127085044980047
+      },
+      "mixture_elpd_ci": {
+        "mean": 0.2983647286891937,
+        "lower": 0.28450811803340914,
+        "upper": 0.31203991249203683
+      }
+    },
+    "time_holdout": {
+      "status": "ok",
+      "label": "time_holdout",
+      "test_votes": 23360,
+      "coverage": 0.7820555741546702,
+      "continuous_elpd_ci": {
+        "mean": 0.4852323830127716,
+        "lower": 0.464005433768034,
+        "upper": 0.5077784165740014
+      },
+      "mixture_elpd_ci": {
+        "mean": 0.4172643721103668,
+        "lower": 0.3981831826269627,
+        "upper": 0.44012761786580085
+      }
+    },
+    "continuous_auxiliary_gate": true,
+    "mixture_auxiliary_gate": true
+  },
+  "gates": {
+    "continuous_predictive_gate": false,
+    "mixture_predictive_gate": false,
+    "continuous_auxiliary_gate": true,
+    "mixture_auxiliary_gate": true,
+    "stable_class_gate": false,
+    "continuous_reduction": -0.9594508512350238,
+    "mixture_reduction": -0.058456901703294865
+  },
+  "provenance": {
+    "created_at": "2026-07-27T14:55:16.428045+00:00",
+    "config_hash": "cf13144aadc492db9a35a6b9accc4db41790d90c659fa0cb15f3adf92a47b9c1",
+    "git_commit": "f23a20219de9d37be2996540640241c0fcb55dbe",
+    "seed": 1103,
+    "inputs": {},
+    "compute": {
+      "requested": "cuda",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "python_torch": "2.7.1+cu118",
+      "cuda_available": true,
+      "cuda_runtime": "11.8",
+      "mps_built": false,
+      "mps_available": false,
+      "selected": "cuda",
+      "cuda": {
+        "device_index": 0,
+        "name": "NVIDIA GeForce RTX 3060",
+        "compute_capability": [
+          8,
+          6
+        ],
+        "total_memory_bytes": 12884377600,
+        "free_memory_bytes": 11185160192,
+        "allocator_backend": "native"
+      }
+    }
+  }
+}

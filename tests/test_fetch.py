@@ -1,4 +1,5 @@
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from placepulse_cusp.data import fetch
 
@@ -37,3 +38,34 @@ def test_kaggle_fetch_downloads_only_configured_files(tmp_path: Path, monkeypatc
         ("owner/dataset", "votes_clean.csv", str(tmp_path / "raw" / "kaggle"))
     ]
     assert Path(result["files"][0]["path"]).name == "votes_clean.csv"
+
+
+def test_kaggle_fetch_extracts_zip_returned_with_csv_name(tmp_path: Path, monkeypatch):
+    def fake_download(handle, path=None, output_dir=None):
+        target = Path(output_dir) / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with ZipFile(target, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr(path, "choice,left,right\nleft,a,b\n")
+        return str(target)
+
+    monkeypatch.setattr(fetch.kagglehub, "dataset_download", fake_download)
+    output_dir = tmp_path / "raw" / "kaggle"
+    config = {
+        "data": {
+            "raw_dir": str(tmp_path / "raw"),
+            "source_url": "https://example.test",
+            "local_source": None,
+            "kaggle": {
+                "handle": "owner/dataset",
+                "version": 2,
+                "files": ["votes_clean.csv"],
+                "output_dir": str(output_dir),
+            },
+        }
+    }
+
+    result = fetch.fetch_data(config)
+
+    target = Path(result["files"][0]["path"])
+    assert target.read_text("utf-8") == "choice,left,right\nleft,a,b\n"
+    assert (output_dir / "votes_clean.csv.zip").is_file()

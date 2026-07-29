@@ -13,6 +13,42 @@ import kagglehub
 from placepulse_cusp.provenance import sha256_file, write_json
 
 
+def _materialize_downloaded_file(
+    downloaded: Path, output_dir: Path, relative_path: str
+) -> Path:
+    """Extract a requested file when KaggleHub returns a ZIP with its filename."""
+    if not zipfile.is_zipfile(downloaded):
+        return downloaded
+
+    expected_name = Path(relative_path).name
+    target = output_dir / relative_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.extracting")
+
+    with zipfile.ZipFile(downloaded) as archive:
+        matches = [
+            member
+            for member in archive.infolist()
+            if not member.is_dir() and Path(member.filename).name == expected_name
+        ]
+        if len(matches) != 1:
+            raise FileNotFoundError(
+                f"Expected exactly one {expected_name!r} in {downloaded}, found {len(matches)}."
+            )
+        with archive.open(matches[0]) as source, temporary.open("wb") as destination:
+            shutil.copyfileobj(source, destination)
+
+    if downloaded.resolve() == target.resolve():
+        backup = downloaded.with_name(f"{downloaded.name}.zip")
+        index = 1
+        while backup.exists():
+            backup = downloaded.with_name(f"{downloaded.name}.zip.{index}")
+            index += 1
+        downloaded.replace(backup)
+    temporary.replace(target)
+    return target
+
+
 def _copy_or_extract(source: Path, raw_dir: Path) -> list[Path]:
     raw_dir.mkdir(parents=True, exist_ok=True)
     if source.is_dir():
@@ -66,7 +102,7 @@ def fetch_data(config: dict[str, Any], source: str | None = None) -> dict[str, A
                         )
                     candidate = matches[0]
                 downloaded = candidate
-            files.append(downloaded)
+            files.append(_materialize_downloaded_file(downloaded, output_dir, relative_path))
         mode = "kaggle"
     else:
         url = data_cfg.get("download_url")
