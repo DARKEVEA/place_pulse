@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="zh"><meta charset="utf-8"><title>Place Pulse CUSP experiment</title>
+<style>body{font:16px/1.55 system-ui;max-width:1000px;margin:40px auto;padding:0 20px}
+pre{background:#f5f5f5;padding:18px;overflow:auto}.verdict{font-size:1.5rem}</style>
+<h1>Place Pulse 标量充分性与 CUSP 实验</h1>
+<p class="verdict">最终判定：<strong>SCALAR_NOT_REJECTED</strong></p>
+<h2>判定记录</h2><pre>{
+  &quot;verdict&quot;: &quot;SCALAR_NOT_REJECTED&quot;,
+  &quot;reasons&quot;: [],
+  &quot;gates&quot;: {
+    &quot;continuous_predictive_gate&quot;: false,
+    &quot;mixture_predictive_gate&quot;: true,
+    &quot;stable_class_gate&quot;: false,
+    &quot;continuous_reduction&quot;: -0.6062686946268628,
+    &quot;mixture_reduction&quot;: 0.13104313475819576
+  },
+  &quot;metrics&quot;: {
+    &quot;primary&quot;: {
+      &quot;dimension&quot;: &quot;safety&quot;,
+      &quot;verdict&quot;: &quot;SCALAR_NOT_REJECTED&quot;,
+      &quot;selected_rank&quot;: 2,
+      &quot;selected_classes&quot;: 3,
+      &quot;folds&quot;: [
+        {
+          &quot;fold&quot;: 0,
+          &quot;train_votes&quot;: 406,
+          &quot;test_votes&quot;: 194,
+          &quot;test_coverage&quot;: 1.0,
+          &quot;m0_cross_entropy&quot;: 1.0971339096235957,
+          &quot;scalar_cross_entropy&quot;: 1.1176676750183105,
+          &quot;continuous_cross_entropy&quot;: 1.888570785522461,
+          &quot;mixture_cross_entropy&quot;: 1.009419322013855
+        },
+        {
+          &quot;fold&quot;: 1,
+          &quot;train_votes&quot;: 389,
+          &quot;test_votes&quot;: 211,
+          &quot;test_coverage&quot;: 1.0,
+          &quot;m0_cross_entropy&quot;: 1.0550274275071172,
+          &quot;scalar_cross_entropy&quot;: 1.1189308166503906,
+          &quot;continuous_cross_entropy&quot;: 1.7861605882644653,
+          &quot;mixture_cross_entropy&quot;: 0.9742129445075989
+        },
+        {
+          &quot;fold&quot;: 2,
+          &quot;train_votes&quot;: 405,
+          &quot;test_votes&quot;: 195,
+          &quot;test_coverage&quot;: 1.0,
+          &quot;m0_cross_entropy&quot;: 1.0902906465612057,
+          &quot;scalar_cross_entropy&quot;: 1.2124459743499756,
+          &quot;continuous_cross_entropy&quot;: 1.8667538166046143,
+          &quot;mixture_cross_entropy&quot;: 1.0134776830673218
+        }
+      ],
+      &quot;scalar_cross_entropy&quot;: 1.1489148139953613,
+      &quot;continuous_cross_entropy&quot;: 1.845465898513794,
+      &quot;mixture_cross_entropy&quot;: 0.9983574151992798,
+      &quot;continuous_elpd_ci&quot;: {
+        &quot;mean&quot;: -0.6965513229370117,
+        &quot;lower&quot;: -0.8438955307006836,
+        &quot;upper&quot;: -0.6186666205525398
+      },
+      &quot;mixture_elpd_ci&quot;: {
+        &quot;mean&quot;: 0.15055738389492035,
+        &quot;lower&quot;: 0.10668969564139844,
+        &quot;upper&quot;: 0.21044004708528513
+      },
+      &quot;class_weights&quot;: [
+        0.47984591126441956,
+        0.4853096902370453,
+        0.034844379872083664
+      ],
+      &quot;ranking_reversal_fraction&quot;: 0.4161129568106312,
+      &quot;stability_ari&quot;: 0.021185323651352842,
+      &quot;gates&quot;: {
+        &quot;continuous_predictive_gate&quot;: false,
+        &quot;mixture_predictive_gate&quot;: true,
+        &quot;stable_class_gate&quot;: false,
+        &quot;continuous_reduction&quot;: -0.6062686946268628,
+        &quot;mixture_reduction&quot;: 0.13104313475819576
+      },
+      &quot;provenance&quot;: {
+        &quot;created_at&quot;: &quot;2026-07-24T04:53:03.572311+00:00&quot;,
+        &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+        &quot;git_commit&quot;: null,
+        &quot;seed&quot;: 1103,
+        &quot;inputs&quot;: {}
+      }
+    },
+    &quot;cusp&quot;: {
+      &quot;status&quot;: &quot;skipped&quot;,
+      &quot;reason&quot;: &quot;mixture_gate_failed&quot;
+    },
+    &quot;replication&quot;: {
+      &quot;lively&quot;: {
+        &quot;dimension&quot;: &quot;lively&quot;,
+        &quot;verdict&quot;: &quot;SCALAR_REJECTED_MIXTURE&quot;,
+        &quot;selected_rank&quot;: 2,
+        &quot;selected_classes&quot;: 3,
+        &quot;folds&quot;: [
+          {
+            &quot;fold&quot;: 0,
+            &quot;train_votes&quot;: 401,
+            &quot;test_votes&quot;: 199,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0686580565822839,
+            &quot;scalar_cross_entropy&quot;: 1.2118664979934692,
+            &quot;continuous_cross_entropy&quot;: 1.86106276512146,
+            &quot;mixture_cross_entropy&quot;: 1.0411404371261597
+          },
+          {
+            &quot;fold&quot;: 1,
+            &quot;train_votes&quot;: 404,
+            &quot;test_votes&quot;: 196,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.057372810909288,
+            &quot;scalar_cross_entropy&quot;: 1.1401312351226807,
+            &quot;continuous_cross_entropy&quot;: 1.9214707612991333,
+            &quot;mixture_cross_entropy&quot;: 1.0250918865203857
+          },
+          {
+            &quot;fold&quot;: 2,
+            &quot;train_votes&quot;: 395,
+            &quot;test_votes&quot;: 205,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.1086723774367215,
+            &quot;scalar_cross_entropy&quot;: 1.2917323112487793,
+            &quot;continuous_cross_entropy&quot;: 1.795622706413269,
+            &quot;mixture_cross_entropy&quot;: 1.0949528217315674
+          }
+        ],
+        &quot;scalar_cross_entropy&quot;: 1.2157204151153564,
+        &quot;continuous_cross_entropy&quot;: 1.8584372997283936,
+        &quot;mixture_cross_entropy&quot;: 1.054283857345581,
+        &quot;continuous_elpd_ci&quot;: {
+          &quot;mean&quot;: -0.6427170038223267,
+          &quot;lower&quot;: -0.8166091203689575,
+          &quot;upper&quot;: -0.5166795797646047
+        },
+        &quot;mixture_elpd_ci&quot;: {
+          &quot;mean&quot;: 0.16143672168254852,
+          &quot;lower&quot;: 0.09666686821728945,
+          &quot;upper&quot;: 0.21952046975493428
+        },
+        &quot;class_weights&quot;: [
+          0.49476996064186096,
+          0.029588429257273674,
+          0.4756416380405426
+        ],
+        &quot;ranking_reversal_fraction&quot;: 0.260797342192691,
+        &quot;stability_ari&quot;: 1.0,
+        &quot;gates&quot;: {
+          &quot;continuous_predictive_gate&quot;: false,
+          &quot;mixture_predictive_gate&quot;: true,
+          &quot;stable_class_gate&quot;: true,
+          &quot;continuous_reduction&quot;: -0.5286716227036884,
+          &quot;mixture_reduction&quot;: 0.13279085862390252
+        },
+        &quot;provenance&quot;: {
+          &quot;created_at&quot;: &quot;2026-07-24T04:53:03.924282+00:00&quot;,
+          &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+          &quot;git_commit&quot;: null,
+          &quot;seed&quot;: 1103,
+          &quot;inputs&quot;: {}
+        }
+      },
+      &quot;beautiful&quot;: {
+        &quot;dimension&quot;: &quot;beautiful&quot;,
+        &quot;verdict&quot;: &quot;SCALAR_NOT_REJECTED&quot;,
+        &quot;selected_rank&quot;: 1,
+        &quot;selected_classes&quot;: 3,
+        &quot;folds&quot;: [
+          {
+            &quot;fold&quot;: 0,
+            &quot;train_votes&quot;: 409,
+            &quot;test_votes&quot;: 191,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0863515541287088,
+            &quot;scalar_cross_entropy&quot;: 1.174783706665039,
+            &quot;continuous_cross_entropy&quot;: 1.555256962776184,
+            &quot;mixture_cross_entropy&quot;: 1.0770151615142822
+          },
+          {
+            &quot;fold&quot;: 1,
+            &quot;train_votes&quot;: 393,
+            &quot;test_votes&quot;: 207,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0832866406321535,
+            &quot;scalar_cross_entropy&quot;: 1.2754184007644653,
+            &quot;continuous_cross_entropy&quot;: 1.8824572563171387,
+            &quot;mixture_cross_entropy&quot;: 1.1028459072113037
+          },
+          {
+            &quot;fold&quot;: 2,
+            &quot;train_votes&quot;: 398,
+            &quot;test_votes&quot;: 202,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0675198729230106,
+            &quot;scalar_cross_entropy&quot;: 1.1256645917892456,
+            &quot;continuous_cross_entropy&quot;: 1.5630465745925903,
+            &quot;mixture_cross_entropy&quot;: 1.0275284051895142
+          }
+        ],
+        &quot;scalar_cross_entropy&quot;: 1.1929657459259033,
+        &quot;continuous_cross_entropy&quot;: 1.6707634925842285,
+        &quot;mixture_cross_entropy&quot;: 1.0692662000656128,
+        &quot;continuous_elpd_ci&quot;: {
+          &quot;mean&quot;: -0.4777976870536804,
+          &quot;lower&quot;: -0.6486766904592514,
+          &quot;upper&quot;: -0.37581764161586767
+        },
+        &quot;mixture_elpd_ci&quot;: {
+          &quot;mean&quot;: 0.1236996203660965,
+          &quot;lower&quot;: 0.06483189668506384,
+          &quot;upper&quot;: 0.17596989609301086
+        },
+        &quot;class_weights&quot;: [
+          0.36560341715812683,
+          0.3960232734680176,
+          0.23837324976921082
+        ],
+        &quot;ranking_reversal_fraction&quot;: 0.4543189368770764,
+        &quot;stability_ari&quot;: 0.18560240458520602,
+        &quot;gates&quot;: {
+          &quot;continuous_predictive_gate&quot;: false,
+          &quot;mixture_predictive_gate&quot;: true,
+          &quot;stable_class_gate&quot;: false,
+          &quot;continuous_reduction&quot;: -0.40051254471475983,
+          &quot;mixture_reduction&quot;: 0.10369077761263203
+        },
+        &quot;provenance&quot;: {
+          &quot;created_at&quot;: &quot;2026-07-24T04:53:04.281017+00:00&quot;,
+          &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+          &quot;git_commit&quot;: null,
+          &quot;seed&quot;: 1103,
+          &quot;inputs&quot;: {}
+        }
+      },
+      &quot;wealthy&quot;: {
+        &quot;dimension&quot;: &quot;wealthy&quot;,
+        &quot;verdict&quot;: &quot;SCALAR_REJECTED_MIXTURE&quot;,
+        &quot;selected_rank&quot;: 1,
+        &quot;selected_classes&quot;: 2,
+        &quot;folds&quot;: [
+          {
+            &quot;fold&quot;: 0,
+            &quot;train_votes&quot;: 392,
+            &quot;test_votes&quot;: 208,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0825628208623794,
+            &quot;scalar_cross_entropy&quot;: 1.2142393589019775,
+            &quot;continuous_cross_entropy&quot;: 1.544677734375,
+            &quot;mixture_cross_entropy&quot;: 1.074514627456665
+          },
+          {
+            &quot;fold&quot;: 1,
+            &quot;train_votes&quot;: 399,
+            &quot;test_votes&quot;: 201,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0745730146449248,
+            &quot;scalar_cross_entropy&quot;: 1.122434139251709,
+            &quot;continuous_cross_entropy&quot;: 1.4162546396255493,
+            &quot;mixture_cross_entropy&quot;: 1.0107945203781128
+          },
+          {
+            &quot;fold&quot;: 2,
+            &quot;train_votes&quot;: 409,
+            &quot;test_votes&quot;: 191,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0658723302591846,
+            &quot;scalar_cross_entropy&quot;: 1.0897778272628784,
+            &quot;continuous_cross_entropy&quot;: 1.4113572835922241,
+            &quot;mixture_cross_entropy&quot;: 0.9905815720558167
+          }
+        ],
+        &quot;scalar_cross_entropy&quot;: 1.143864393234253,
+        &quot;continuous_cross_entropy&quot;: 1.4592156410217285,
+        &quot;mixture_cross_entropy&quot;: 1.0264497995376587,
+        &quot;continuous_elpd_ci&quot;: {
+          &quot;mean&quot;: -0.3153512477874756,
+          &quot;lower&quot;: -0.3835107259452343,
+          &quot;upper&quot;: -0.2607383862137795
+        },
+        &quot;mixture_elpd_ci&quot;: {
+          &quot;mean&quot;: 0.11741457879543304,
+          &quot;lower&quot;: 0.060039492417126895,
+          &quot;upper&quot;: 0.1712830536067486
+        },
+        &quot;class_weights&quot;: [
+          0.4319431781768799,
+          0.5680567622184753
+        ],
+        &quot;ranking_reversal_fraction&quot;: 0.33222591362126247,
+        &quot;stability_ari&quot;: 0.816461508352695,
+        &quot;gates&quot;: {
+          &quot;continuous_predictive_gate&quot;: false,
+          &quot;mixture_predictive_gate&quot;: true,
+          &quot;stable_class_gate&quot;: true,
+          &quot;continuous_reduction&quot;: -0.2756893646246182,
+          &quot;mixture_reduction&quot;: 0.10264730189267182
+        },
+        &quot;provenance&quot;: {
+          &quot;created_at&quot;: &quot;2026-07-24T04:53:04.619744+00:00&quot;,
+          &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+          &quot;git_commit&quot;: null,
+          &quot;seed&quot;: 1103,
+          &quot;inputs&quot;: {}
+        }
+      },
+      &quot;boring&quot;: {
+        &quot;dimension&quot;: &quot;boring&quot;,
+        &quot;verdict&quot;: &quot;SCALAR_REJECTED_MIXTURE&quot;,
+        &quot;selected_rank&quot;: 1,
+        &quot;selected_classes&quot;: 2,
+        &quot;folds&quot;: [
+          {
+            &quot;fold&quot;: 0,
+            &quot;train_votes&quot;: 385,
+            &quot;test_votes&quot;: 215,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0451102362710898,
+            &quot;scalar_cross_entropy&quot;: 1.1069713830947876,
+            &quot;continuous_cross_entropy&quot;: 1.478614091873169,
+            &quot;mixture_cross_entropy&quot;: 0.9509994983673096
+          },
+          {
+            &quot;fold&quot;: 1,
+            &quot;train_votes&quot;: 412,
+            &quot;test_votes&quot;: 188,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0539505008401153,
+            &quot;scalar_cross_entropy&quot;: 1.1486719846725464,
+            &quot;continuous_cross_entropy&quot;: 1.4965814352035522,
+            &quot;mixture_cross_entropy&quot;: 0.9647368788719177
+          },
+          {
+            &quot;fold&quot;: 2,
+            &quot;train_votes&quot;: 403,
+            &quot;test_votes&quot;: 197,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0906168444393538,
+            &quot;scalar_cross_entropy&quot;: 1.2463051080703735,
+            &quot;continuous_cross_entropy&quot;: 1.692276954650879,
+            &quot;mixture_cross_entropy&quot;: 1.020509958267212
+          }
+        ],
+        &quot;scalar_cross_entropy&quot;: 1.1657854318618774,
+        &quot;continuous_cross_entropy&quot;: 1.5543965101242065,
+        &quot;mixture_cross_entropy&quot;: 0.9781264066696167,
+        &quot;continuous_elpd_ci&quot;: {
+          &quot;mean&quot;: -0.3886111080646515,
+          &quot;lower&quot;: -0.4583397224545479,
+          &quot;upper&quot;: -0.3121264986693859
+        },
+        &quot;mixture_elpd_ci&quot;: {
+          &quot;mean&quot;: 0.18765896558761597,
+          &quot;lower&quot;: 0.1280744168907404,
+          &quot;upper&quot;: 0.23412144817411898
+        },
+        &quot;class_weights&quot;: [
+          0.45827341079711914,
+          0.5417265892028809
+        ],
+        &quot;ranking_reversal_fraction&quot;: 0.3961794019933555,
+        &quot;stability_ari&quot;: 0.7153077652697002,
+        &quot;gates&quot;: {
+          &quot;continuous_predictive_gate&quot;: false,
+          &quot;mixture_predictive_gate&quot;: true,
+          &quot;stable_class_gate&quot;: true,
+          &quot;continuous_reduction&quot;: -0.33334700163620834,
+          &quot;mixture_reduction&quot;: 0.16097218241314806
+        },
+        &quot;provenance&quot;: {
+          &quot;created_at&quot;: &quot;2026-07-24T04:53:04.964453+00:00&quot;,
+          &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+          &quot;git_commit&quot;: null,
+          &quot;seed&quot;: 1103,
+          &quot;inputs&quot;: {}
+        }
+      },
+      &quot;depressing&quot;: {
+        &quot;dimension&quot;: &quot;depressing&quot;,
+        &quot;verdict&quot;: &quot;SCALAR_NOT_REJECTED&quot;,
+        &quot;selected_rank&quot;: 2,
+        &quot;selected_classes&quot;: 2,
+        &quot;folds&quot;: [
+          {
+            &quot;fold&quot;: 0,
+            &quot;train_votes&quot;: 407,
+            &quot;test_votes&quot;: 193,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0692769193152136,
+            &quot;scalar_cross_entropy&quot;: 1.128528356552124,
+            &quot;continuous_cross_entropy&quot;: 2.005988836288452,
+            &quot;mixture_cross_entropy&quot;: 0.9972042441368103
+          },
+          {
+            &quot;fold&quot;: 1,
+            &quot;train_votes&quot;: 403,
+            &quot;test_votes&quot;: 197,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0986882224311156,
+            &quot;scalar_cross_entropy&quot;: 1.1827867031097412,
+            &quot;continuous_cross_entropy&quot;: 1.7744866609573364,
+            &quot;mixture_cross_entropy&quot;: 1.0087701082229614
+          },
+          {
+            &quot;fold&quot;: 2,
+            &quot;train_votes&quot;: 390,
+            &quot;test_votes&quot;: 210,
+            &quot;test_coverage&quot;: 1.0,
+            &quot;m0_cross_entropy&quot;: 1.0696708952122165,
+            &quot;scalar_cross_entropy&quot;: 1.1735278367996216,
+            &quot;continuous_cross_entropy&quot;: 1.794695496559143,
+            &quot;mixture_cross_entropy&quot;: 1.0369009971618652
+          }
+        ],
+        &quot;scalar_cross_entropy&quot;: 1.1620930433273315,
+        &quot;continuous_cross_entropy&quot;: 1.8560261726379395,
+        &quot;mixture_cross_entropy&quot;: 1.0148955583572388,
+        &quot;continuous_elpd_ci&quot;: {
+          &quot;mean&quot;: -0.6939331889152527,
+          &quot;lower&quot;: -0.8017459630966186,
+          &quot;upper&quot;: -0.5416381403803826
+        },
+        &quot;mixture_elpd_ci&quot;: {
+          &quot;mean&quot;: 0.14719747006893158,
+          &quot;lower&quot;: 0.08383854385465384,
+          &quot;upper&quot;: 0.18058882504701612
+        },
+        &quot;class_weights&quot;: [
+          0.39207693934440613,
+          0.6079230308532715
+        ],
+        &quot;ranking_reversal_fraction&quot;: 0.37209302325581395,
+        &quot;stability_ari&quot;: 0.350442904753552,
+        &quot;gates&quot;: {
+          &quot;continuous_predictive_gate&quot;: false,
+          &quot;mixture_predictive_gate&quot;: true,
+          &quot;stable_class_gate&quot;: false,
+          &quot;continuous_reduction&quot;: -0.5971407653587897,
+          &quot;mixture_reduction&quot;: 0.12666583438846993
+        },
+        &quot;provenance&quot;: {
+          &quot;created_at&quot;: &quot;2026-07-24T04:53:05.302623+00:00&quot;,
+          &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+          &quot;git_commit&quot;: null,
+          &quot;seed&quot;: 1103,
+          &quot;inputs&quot;: {}
+        }
+      }
+    }
+  },
+  &quot;provenance&quot;: {
+    &quot;created_at&quot;: &quot;2026-07-24T04:53:05.326425+00:00&quot;,
+    &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+    &quot;git_commit&quot;: null,
+    &quot;seed&quot;: 1103,
+    &quot;inputs&quot;: {}
+  }
+}</pre>
+<h2>数据预检</h2><pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;reasons&quot;: [],
+  &quot;rows&quot;: 3600,
+  &quot;choice_counts&quot;: {
+    &quot;right&quot;: 1396,
+    &quot;equal&quot;: 818,
+    &quot;left&quot;: 1386
+  },
+  &quot;dimension_counts&quot;: {
+    &quot;beautiful&quot;: 600,
+    &quot;lively&quot;: 600,
+    &quot;depressing&quot;: 600,
+    &quot;boring&quot;: 600,
+    &quot;safety&quot;: 600,
+    &quot;wealthy&quot;: 600
+  },
+  &quot;identified_primary_votes&quot;: 600,
+  &quot;repeat_voters&quot;: 74,
+  &quot;images&quot;: 50,
+  &quot;largest_component_fraction&quot;: 1.0,
+  &quot;timestamp_missing_fraction&quot;: 0.0,
+  &quot;suspicious_votes&quot;: 0,
+  &quot;provenance&quot;: {
+    &quot;created_at&quot;: &quot;2026-07-24T04:53:35.932203+00:00&quot;,
+    &quot;config_hash&quot;: &quot;a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9&quot;,
+    &quot;git_commit&quot;: null,
+    &quot;seed&quot;: 1103,
+    &quot;inputs&quot;: {
+      &quot;data/interim/votes.parquet&quot;: &quot;54285ed4d4adcfe394df97d40abe9fb25125e3ad8b5a74e3329d163b446f858c&quot;
+    }
+  }
+}</pre>
+</html>

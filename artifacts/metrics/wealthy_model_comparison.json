@@ -1,0 +1,71 @@
+{
+  "dimension": "wealthy",
+  "verdict": "SCALAR_REJECTED_MIXTURE",
+  "selected_rank": 1,
+  "selected_classes": 2,
+  "folds": [
+    {
+      "fold": 0,
+      "train_votes": 392,
+      "test_votes": 208,
+      "test_coverage": 1.0,
+      "m0_cross_entropy": 1.0825628208623794,
+      "scalar_cross_entropy": 1.2142393589019775,
+      "continuous_cross_entropy": 1.544677734375,
+      "mixture_cross_entropy": 1.074514627456665
+    },
+    {
+      "fold": 1,
+      "train_votes": 399,
+      "test_votes": 201,
+      "test_coverage": 1.0,
+      "m0_cross_entropy": 1.0745730146449248,
+      "scalar_cross_entropy": 1.122434139251709,
+      "continuous_cross_entropy": 1.4162546396255493,
+      "mixture_cross_entropy": 1.0107945203781128
+    },
+    {
+      "fold": 2,
+      "train_votes": 409,
+      "test_votes": 191,
+      "test_coverage": 1.0,
+      "m0_cross_entropy": 1.0658723302591846,
+      "scalar_cross_entropy": 1.0897778272628784,
+      "continuous_cross_entropy": 1.4113572835922241,
+      "mixture_cross_entropy": 0.9905815720558167
+    }
+  ],
+  "scalar_cross_entropy": 1.143864393234253,
+  "continuous_cross_entropy": 1.4592156410217285,
+  "mixture_cross_entropy": 1.0264497995376587,
+  "continuous_elpd_ci": {
+    "mean": -0.3153512477874756,
+    "lower": -0.3835107259452343,
+    "upper": -0.2607383862137795
+  },
+  "mixture_elpd_ci": {
+    "mean": 0.11741457879543304,
+    "lower": 0.060039492417126895,
+    "upper": 0.1712830536067486
+  },
+  "class_weights": [
+    0.4319431781768799,
+    0.5680567622184753
+  ],
+  "ranking_reversal_fraction": 0.33222591362126247,
+  "stability_ari": 0.816461508352695,
+  "gates": {
+    "continuous_predictive_gate": false,
+    "mixture_predictive_gate": true,
+    "stable_class_gate": true,
+    "continuous_reduction": -0.2756893646246182,
+    "mixture_reduction": 0.10264730189267182
+  },
+  "provenance": {
+    "created_at": "2026-07-24T04:53:04.619744+00:00",
+    "config_hash": "a60712416a71d0d3cfc7a50a54a0e97e01a6bcbf49a3159ccd221e9341c4a8d9",
+    "git_commit": null,
+    "seed": 1103,
+    "inputs": {}
+  }
+}
