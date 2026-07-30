@@ -22,6 +22,42 @@ def test_selection_disables_lbfgs_but_final_training_keeps_it():
     )
 
 
+def test_scalar_selection_reports_boundary_parameters(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+    encoded = SimpleNamespace(choice=torch.tensor([0]))
+    monkeypatch.setattr(
+        pipeline,
+        "_encoded_inner_edge_splits",
+        lambda *args, **kwargs: [(encoded, encoded)],
+    )
+    monkeypatch.setattr(pipeline, "_choice_array", lambda value: np.asarray([0]))
+    monkeypatch.setattr(
+        pipeline, "cross_entropy", lambda probabilities, choices: float(probabilities[0])
+    )
+
+    def fake_fit(*args, **kwargs):
+        score = -float(kwargs["utility_l2"])
+        if kwargs["response_styles"]:
+            score -= float(kwargs["style_l2"]) + 1.0
+        return SimpleNamespace(
+            predict_proba=lambda value: np.asarray([score])
+        )
+
+    monkeypatch.setattr(pipeline.DavidsonModel, "fit", fake_fit)
+    selected = pipeline._select_scalar_baseline(
+        object(), config, torch.device("cpu")
+    )
+
+    assert selected["utility_l2"] == 10.0
+    assert selected["style_l2"] == 10.0
+    assert selected["selection_boundary"]
+    assert selected["selection_boundary_parameters"] == [
+        "utility_l2",
+        "style_l2",
+    ]
+
+
 def test_continuous_grid_uses_full_starts_only_for_shortlist(monkeypatch):
     config = load_config("configs/smoke.yaml")
     config["models"].update(
@@ -120,3 +156,69 @@ def test_mixture_grid_uses_full_starts_only_for_shortlist(monkeypatch):
     assert len(screening) == 6
     assert len(refinement) == 2
     assert selected == (2, 0.1)
+
+
+def test_final_continuous_fit_polishes_only_best_start(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"].update({"random_starts": 3, "lbfgs_steps": 4})
+    calls = []
+
+    def fake_fit(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            history=[float(len(calls))],
+            module=torch.nn.Linear(1, 1),
+        )
+
+    monkeypatch.setattr(pipeline.ContinuousPreferenceModel, "fit", fake_fit)
+    pipeline._best_continuous_fit(
+        object(),
+        config,
+        {
+            "utility_l2": 0.1,
+            "style_l2": 0.1,
+            "response_styles": False,
+        },
+        1,
+        0.1,
+        1103,
+        selection=False,
+    )
+    assert len(calls) == 4
+    assert all(call["lbfgs_steps"] == 0 for call in calls[:3])
+    assert calls[-1]["lbfgs_steps"] == 4
+    assert calls[-1]["epochs"] == 0
+    assert calls[-1]["initial_state"] is not None
+
+
+def test_final_mixture_fit_polishes_only_best_start(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"].update({"random_starts": 3, "lbfgs_steps": 4})
+    calls = []
+
+    def fake_fit(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            history=[float(len(calls))],
+            module=torch.nn.Linear(1, 1),
+        )
+
+    monkeypatch.setattr(pipeline.MixtureDavidsonModel, "fit", fake_fit)
+    pipeline._best_mixture_fit(
+        object(),
+        config,
+        {
+            "utility_l2": 0.1,
+            "style_l2": 0.1,
+            "response_styles": False,
+        },
+        2,
+        0.1,
+        1103,
+        selection=False,
+    )
+    assert len(calls) == 4
+    assert all(call["lbfgs_steps"] == 0 for call in calls[:3])
+    assert calls[-1]["lbfgs_steps"] == 4
+    assert calls[-1]["epochs"] == 0
+    assert calls[-1]["initial_state"] is not None

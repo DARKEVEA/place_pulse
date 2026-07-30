@@ -78,6 +78,21 @@ ppc simulate validate-density --config configs/calibration_cuda.yaml
 ppc run heterogeneity --config configs/calibration_cuda.yaml
 ```
 
+Both recovery commands save an atomic checkpoint after every repetition.
+After an interruption, resume without repeating completed repetitions:
+
+```powershell
+ppc simulate validate-models --resume --config configs/calibration_cuda.yaml
+ppc simulate validate-density --resume --config configs/calibration_cuda.yaml
+```
+
+`simulation.model_mechanisms` may restrict a diagnostic model-recovery run
+to a subset of `null`, `scalar`, `continuous`, and `mixture`. For the null
+negative control, selection of the highest regularisation boundary counts as
+recovered only when the scalar, continuous, and mixture predictive gains all
+remain below the configured threshold. The conservative production verdict
+and its boundary warning are retained unchanged in the artifacts.
+
 Review `artifacts/run_002_calibration` before freezing the code and config.
 Only after every calibration gate passes should the six-dimension internal
 validation be run:

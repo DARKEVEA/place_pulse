@@ -78,12 +78,15 @@ class MixtureDavidsonModel:
         patience: int = 30,
         batch_size: int | None = None,
         lbfgs_steps: int = 0,
+        initial_state: dict[str, torch.Tensor] | None = None,
     ) -> "MixtureDavidsonModel":
         utility_l2 = l2 if utility_l2 is None else utility_l2
         style_l2 = utility_l2 if style_l2 is None else style_l2
         module = _MixtureModule(
             train.n_images, train.n_voters, classes, response_styles=response_styles
         ).to(train.left.device)
+        if initial_state is not None:
+            module.load_state_dict(initial_state)
         optimiser = torch.optim.Adam(module.parameters(), lr=learning_rate)
         history, best, stale, best_state = [], float("inf"), 0, None
         n_voters = train.n_voters

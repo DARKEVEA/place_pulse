@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "config_hash": "1a662b6ebe2f563446da75fe66c44fc93f0bae297f6661ac1597680cbfc1c3d5",
+  "code_hash": "e92e8b2b20b547b9febdd7625a990038dfeaadfd1aadd8a9b6d7e71c490e7aa3",
+  "family": "model_recovery",
+  "mechanism": "null",
+  "repetition": 0,
+  "result": {
+    "mechanism": "null",
+    "verdict": "MODEL_CALIBRATION_FAILED",
+    "gates": {
+      "continuous_predictive_gate": false,
+      "continuous_edge_predictive_gate": false,
+      "baseline_predictive_gate": false,
+      "simulation_gate": true,
+      "selection_boundary_gate": false,
+      "baseline_reduction": 2.8790462606912432e-06,
+      "mixture_predictive_gate": false,
+      "mixture_edge_predictive_gate": false,
+      "continuous_auxiliary_gate": true,
+      "mixture_auxiliary_gate": true,
+      "stable_class_gate": false,
+      "mixture_preferred_to_continuous": false,
+      "continuous_reduction": -3.2861680585779174e-07,
+      "mixture_reduction": -4.031032818522245e-05
+    },
+    "selected_rank": 3,
+    "selected_classes": 2,
+    "stability_ari": 0.0,
+    "truth_ari": 1.0,
+    "repetition": 0
+  }
+}

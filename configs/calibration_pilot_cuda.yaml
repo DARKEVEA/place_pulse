@@ -1,0 +1,10 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  model_repetitions: 1
+  model_mechanisms: ["null"]
+  repetitions: 1
+
+reporting:
+  artifacts_dir: artifacts/run_004_null_rule_pilot
+  run_label: RUN_004_NULL_RULE_PILOT

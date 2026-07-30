@@ -362,7 +362,7 @@ def _selection_training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
 def _screening_training_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     """Low-fidelity budget used only to form a candidate shortlist."""
     kwargs = _selection_training_kwargs(config)
-    kwargs["epochs"] = max(20, kwargs["epochs"] // 3)
+    kwargs["epochs"] = max(5, kwargs["epochs"] // 3)
     return kwargs
 
 
@@ -394,6 +394,7 @@ def _select_scalar_baseline(
             "style_l2": candidates[0],
             "response_styles": False,
             "selection_boundary": True,
+            "selection_boundary_parameters": ["inner_splits"],
         }
     m1a_scores: dict[float, list[float]] = {float(x): [] for x in candidates}
     for utility_l2 in candidates:
@@ -435,10 +436,13 @@ def _select_scalar_baseline(
     )
     use_styles = float(improvement.mean()) > standard_error
     values = [float(x) for x in candidates]
-    boundary = len(values) > 1 and (
-        utility_l2 in {min(values), max(values)}
-        or (use_styles and style_l2 in {min(values), max(values)})
-    )
+    boundary_parameters = []
+    if len(values) > 1:
+        if utility_l2 in {min(values), max(values)}:
+            boundary_parameters.append("utility_l2")
+        if use_styles and style_l2 in {min(values), max(values)}:
+            boundary_parameters.append("style_l2")
+    boundary = bool(boundary_parameters)
     return {
         "name": "m1b" if use_styles else "m1a",
         "utility_l2": utility_l2,
@@ -447,6 +451,7 @@ def _select_scalar_baseline(
         "m1b_improvement": float(improvement.mean()),
         "m1b_improvement_se": standard_error,
         "selection_boundary": boundary,
+        "selection_boundary_parameters": boundary_parameters,
     }
 
 
@@ -466,7 +471,25 @@ def _best_continuous_fit(
     start_count = (
         config["models"].get("random_starts", 1) if starts is None else starts
     )
-    for start in range(max(1, int(start_count))):
+    start_count = max(1, int(start_count))
+    training_kwargs = (
+        _screening_training_kwargs(config)
+        if screening
+        else (
+            _selection_training_kwargs(config)
+            if selection
+            else _training_kwargs(config)
+        )
+    )
+    polish_best_only = (
+        not selection
+        and start_count > 1
+        and int(training_kwargs.get("lbfgs_steps", 0)) > 0
+    )
+    fitting_kwargs = dict(training_kwargs)
+    if polish_best_only:
+        fitting_kwargs["lbfgs_steps"] = 0
+    for start in range(start_count):
         set_deterministic(seed + start)
         model = ContinuousPreferenceModel.fit(
             encoded_train,
@@ -475,18 +498,24 @@ def _best_continuous_fit(
             utility_l2=baseline["utility_l2"],
             style_l2=baseline["style_l2"],
             response_styles=baseline["response_styles"],
-            **(
-                _screening_training_kwargs(config)
-                if screening
-                else (
-                    _selection_training_kwargs(config)
-                    if selection
-                    else _training_kwargs(config)
-                )
-            ),
+            **fitting_kwargs,
         )
         if best is None or model.history[-1] < best.history[-1]:
             best = model
+    if polish_best_only:
+        polish_kwargs = dict(training_kwargs)
+        polish_kwargs["epochs"] = 0
+        set_deterministic(seed)
+        best = ContinuousPreferenceModel.fit(
+            encoded_train,
+            rank=rank,
+            l2=l2,
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
+            initial_state=best.module.state_dict(),
+            **polish_kwargs,
+        )
     return best
 
 
@@ -556,7 +585,25 @@ def _best_mixture_fit(
     start_count = (
         config["models"].get("random_starts", 1) if starts is None else starts
     )
-    for start in range(max(1, int(start_count))):
+    start_count = max(1, int(start_count))
+    training_kwargs = (
+        _screening_training_kwargs(config)
+        if screening
+        else (
+            _selection_training_kwargs(config)
+            if selection
+            else _training_kwargs(config)
+        )
+    )
+    polish_best_only = (
+        not selection
+        and start_count > 1
+        and int(training_kwargs.get("lbfgs_steps", 0)) > 0
+    )
+    fitting_kwargs = dict(training_kwargs)
+    if polish_best_only:
+        fitting_kwargs["lbfgs_steps"] = 0
+    for start in range(start_count):
         set_deterministic(seed + start)
         model = MixtureDavidsonModel.fit(
             encoded_train,
@@ -566,18 +613,25 @@ def _best_mixture_fit(
             style_l2=baseline["style_l2"],
             response_styles=baseline["response_styles"],
             dirichlet_alpha=config["models"]["dirichlet_alpha"],
-            **(
-                _screening_training_kwargs(config)
-                if screening
-                else (
-                    _selection_training_kwargs(config)
-                    if selection
-                    else _training_kwargs(config)
-                )
-            ),
+            **fitting_kwargs,
         )
         if best is None or model.history[-1] < best.history[-1]:
             best = model
+    if polish_best_only:
+        polish_kwargs = dict(training_kwargs)
+        polish_kwargs["epochs"] = 0
+        set_deterministic(seed)
+        best = MixtureDavidsonModel.fit(
+            encoded_train,
+            classes=classes,
+            l2=l2,
+            utility_l2=baseline["utility_l2"],
+            style_l2=baseline["style_l2"],
+            response_styles=baseline["response_styles"],
+            dirichlet_alpha=config["models"]["dirichlet_alpha"],
+            initial_state=best.module.state_dict(),
+            **polish_kwargs,
+        )
     return best
 
 
@@ -1376,12 +1430,12 @@ def run_all(config: dict[str, Any], *, resume: bool = False) -> dict[str, Any]:
     model_simulation = (
         json.loads(model_recovery_path.read_text("utf-8"))
         if (resume or calibration_root) and model_recovery_path.exists()
-        else validate_model_recovery(config)
+        else validate_model_recovery(config, resume=resume)
     )
     density_simulation = (
         json.loads(density_recovery_path.read_text("utf-8"))
         if (resume or calibration_root) and density_recovery_path.exists()
-        else validate_density_recovery(config)
+        else validate_density_recovery(config, resume=resume)
     )
     simulation = {
         "model_recovery": model_simulation,

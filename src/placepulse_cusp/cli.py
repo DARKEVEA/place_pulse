@@ -131,9 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "generate":
             result = {"path": str(generate_vote_table(config, mechanism=args.mechanism))}
         elif args.action == "validate-models":
-            result = validate_model_recovery(config)
+            result = validate_model_recovery(config, resume=args.resume)
         else:
-            result = validate_density_recovery(config)
+            result = validate_density_recovery(config, resume=args.resume)
     elif args.group == "run":
         if args.action == "all":
             result = run_all(config, resume=args.resume)
