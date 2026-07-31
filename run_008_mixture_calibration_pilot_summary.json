@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-07-31T15:46:30.7249094+08:00",
+    "finished_at":  "2026-07-31T16:01:28.8891444+08:00",
+    "elapsed_seconds":  898.164,
+    "elapsed_minutes":  14.969,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_mixture_pilot_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_008_mixture_calibration_pilot",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_008_mixture_calibration_pilot.log"
+}

@@ -9,10 +9,11 @@
 | 项目名称 | Place Pulse CUSP |
 | 文档语言 | 中文 |
 | 目标读者 | 没有机器学习、统计学或软件工程背景的读者，以及需要接手项目的开发者 |
-| 文档快照日期 | 2026-07-31 |
+| 文档快照日期 | 2026-08-01 |
 | 当前代码分支 | `main` |
 | 本次归档前基线 | `a01d265`（`calibration: add resumable recovery and null pilot validation`） |
-| 当前归档范围 | RUN_005–007 的规则、配置、脚本、测试、文档和小型 JSON 结果 |
+| 当前已提交基线 | `273c070`（RUN_005–007 规则、测试与结果归档） |
+| 当前工作范围 | RUN_009 结果归档、严格/有效双标准与多 seed screening |
 | 当前科学状态 | 校准尚未全部通过；不能把首轮真实数据输出当作最终确认性结论 |
 
 ## 推荐阅读路线
@@ -26,7 +27,7 @@
 1. 第 1 节“一页摘要”；
 2. 第 2 节“生活化例子”；
 3. 第 9 节“统计闸门”；
-4. 第 17 节“RUN_002 至 RUN_007”；
+4. 第 17 节“RUN_002 至 RUN_009”；
 5. 第 19 节“当前校准结论”；
 6. 第 25 节“最终状态声明”。
 
@@ -119,7 +120,9 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 - RUN_004 对 null 高正则化边界 recovery 规则的实际验证；
 - RUN_005 对 scalar 机制的单次恢复验证；
 - RUN_006 对 continuous 机制中 M1b 风格边界问题的诊断；
-- RUN_007 对“统计显著但实际收益可忽略”规则的复验。
+- RUN_007 对“统计显著但实际收益可忽略”规则的复验；
+- RUN_008 对 mixture 判决、类别稳定性与精确类别数恢复的诊断；
+- RUN_009 对跨折众数、空余类别和候选筛选路径的诊断。
 
 但还没有完成：
 
@@ -132,8 +135,8 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 因此，当前最准确的总状态是：
 
 > **工程流水线已经能运行，null、scalar 和 continuous 的单次 pilot
-> 符合预期，但 mixture、多 seed 与 density 尚未完成，正式科学判断
-> 仍应暂缓。**
+> 符合预期；mixture 判决与分群高度一致，但精确类别数和跨折聚合仍
+> 需修正验证。多 seed 与 density 尚未完成，正式科学判断仍应暂缓。**
 
 ---
 
@@ -1192,7 +1195,7 @@ SCIENTIFIC_VERDICT_DEFERRED
 
 ---
 
-## 17. RUN_002 至 RUN_007 的目标和结果
+## 17. RUN_002 至 RUN_009 的目标和结果
 
 这些运行不是在真实数据上“调出想要的结果”，而是在已知生成真相的
 合成数据上依次检查 null、scalar 和 continuous 机制，并诊断校准规则
@@ -1279,7 +1282,7 @@ mixture reduction    = -7.996e-6
 - 扩大上限后仍选择新上限，说明 null 数据自然倾向无限强收缩；
 - 继续盲目扩到 10000 没有意义。
 
-### 17.3 RUN_002、RUN_003 与 RUN_004 的性能对比
+### 17.3 RUN_002 至 RUN_009 的性能对比
 
 | Run | L2 候选数 | 耗时 | 相对 RUN_002 |
 |---|---:|---:|---:|
@@ -1289,6 +1292,8 @@ mixture reduction    = -7.996e-6
 | RUN_005 scalar | 6 | 14 分 13 秒 | 快约 33.4% |
 | RUN_006 continuous | 6 | 39 分 52 秒 | 慢约 86.8% |
 | RUN_007 continuous-rule | 6 | 27 分 33 秒 | 慢约 29.1% |
+| RUN_008 mixture | 6 | 14 分 58 秒 | 快约 29.9% |
+| RUN_009 mixture-aggregation | 6 | 16 分 1 秒 | 快约 25.0% |
 
 RUN_002 与 RUN_003 的候选数和耗时几乎线性增长，证明候选模型拟合
 是主要成本来源。RUN_004 恢复六点网格后，比 RUN_002 还快约 4 分
@@ -1512,6 +1517,117 @@ RUN_006 与 RUN_007 的主要预测结果几乎没有变化：
 制造 continuous 预测证据。混合模型虽然也改善，但改善小于 continuous，
 且 `stability_ari=0.423 < 0.70`，因此没有形成稳定类别解释。
 
+### 17.8 RUN_008 mixture calibration pilot
+
+目录：
+
+```text
+artifacts/run_008_mixture_calibration_pilot
+```
+
+RUN_008 只运行一次 mixture 机制，目标是检查：
+
+- 是否正确拒绝 scalar；
+- mixture 是否稳定优于 continuous；
+- 是否恢复生成时设定的 3 类；
+- truth ARI 与重拟合 stability ARI 是否达到 `0.70`。
+
+运行正常完成，exit code 为 0，耗时 898.164 秒，即 14 分 58 秒。
+工程运行与正式 mixture 判决均成功：
+
+```text
+verdict = SCALAR_REJECTED_MIXTURE
+baseline reduction = 12.259%
+continuous reduction = 17.859%
+mixture reduction = 20.065%
+mixture preferred to continuous = true
+stable class gate = true
+```
+
+mixture 相对 scalar 的改善比 continuous 多约 2.21 个百分点，因此不是
+仅凭类别稳定性获胜。类别质量也很高：
+
+```text
+selected classes = 4
+true classes = 3
+truth ARI = 0.9791
+stability ARI = 0.9989
+```
+
+这表示四类划分与真实三类划分几乎一致，而且四类规格在重拟合中非常
+稳定。最可能的表面现象是某个真实类被进一步拆分，但当前产物没有输出
+类别权重、对应关系或每折选择，不能直接确认。
+
+严格 recovery 仍然失败：
+
+```text
+recovered = false
+reason = mixture_structure_not_recovered
+```
+
+原因是 recovery 规则同时要求 verdict 正确、truth ARI 达标和
+`selected_classes == 3`。不能因为 ARI 很高就事后放宽精确类别数要求。
+
+RUN_008 还暴露了 simulation recovery 与生产流水线的不一致：
+
+- simulation 在 3 个 outer folds 中分别选择规格；
+- 但最后使用 `selections[-1]`，即最后一折的类别数；
+- truth ARI 也只根据最后一折模型计算；
+- stability 使用最后一折类别规格在全数据上重拟合；
+- 生产流水线则使用跨折众数确定 `selected_classes`。
+
+因此目前的 `selected_classes=4` 只能证明最后一折选择了四类，不能证明
+三折共识也是四类。该问题已在 RUN_009 代码中修正：保存所有 fold
+selection，并使 simulation 的聚合语义与生产流水线一致；仍需实际运行
+确认 seed 1103 的跨折众数。
+
+### 17.9 RUN_009 mixture aggregation pilot
+
+目录：
+
+```text
+artifacts/run_009_mixture_aggregation_pilot
+```
+
+RUN_009 正常完成，耗时 960.713 秒，即 16 分 1 秒。新聚合路径工作
+正常，三个 outer folds 全部选择 `K=4, L2=0.1`，所以跨折众数仍为 4，
+不是 RUN_008 最后一折偶然造成的结果。
+
+结构恢复质量进一步提高：
+
+```text
+fold truth ARI = [0.9953, 0.9904, 0.9791]
+median fold truth ARI = 0.9904
+aggregate fit truth ARI = 0.9969
+stability ARI = 0.9989
+```
+
+聚合模型的类别权重为：
+
+```text
+25.36%, 39.97%, 34.51%, 0.15%
+```
+
+前三类几乎等于生成真相 `25%/40%/35%`，第四类只有 `0.15%`。按照
+预先存在的 `min_class_weight=10%`，有效类别数为 3，但名义类别数仍是
+4。因此必须并行记录：
+
+```text
+strict exact-class recovery = failed
+effective-class recovery = passed
+```
+
+有效标准不是替换严格标准。严格 `status/recovered/recovery_rates` 继续
+要求名义上精确选择 3 类；新增 `effective_status/effective_recovered/
+effective_recovery_rates` 只承认三个权重至少 10%、truth ARI 达标且
+stability ARI 达标的实质结构。
+
+RUN_009 同时发现多保真 shortlist 的方法债务：三个 folds 的完整
+refinement 都只包含 K4/K5，真实 K3 在低保真 screening 后被淘汰。
+因此当前不能声称“完整训练后的 K4 明确胜过完整训练后的 K3”。结构
+分层 shortlist 仍应在最终确认性冻结前解决。用户选择先进行多 seed
+screening，所以该筛查必须标为修订性/工程筛查，而不是严格门槛已经通过。
+
 ---
 
 ## 18. 性能分析
@@ -1607,7 +1723,7 @@ recovery 可能超过该范围。
 
 ### 19.1 已经知道的
 
-对 seed 1103 的单次 null、scalar 和 continuous：
+对 seed 1103 的单次 null、scalar、continuous 和 mixture：
 
 - null 中 M1 没有胜过 M0，M2/M3 也没有虚假改善；
 - scalar 中 M1 明显胜过 M0，M2/M3 没有进一步改善；
@@ -1615,10 +1731,14 @@ recovery 可能超过该范围。
 - continuous 中 M3 虽有改善，但弱于 M2 且类别不稳定；
 - null 的最高正则化与真实效用为 0 一致；
 - continuous 中无实际意义的 M1b 风格边界已被识别并审慎折叠。
+- mixture 中 M3 正确胜过 M2，truth ARI 和 stability ARI 都很高；
+- mixture 的精确类别数恢复仍未通过；RUN_009 已确认三折都选择 4，
+  但第四类权重只有 0.15%。
 
 因此：
 
-> 这一个 seed 下的 null、scalar 和 continuous 模型行为均符合生成真相。
+> 这一个 seed 下的 null、scalar 和 continuous 行为符合生成真相；
+> mixture 的模型家族判决正确、分群近乎真实，但精确类别数尚未恢复。
 
 RUN_004 将这一事实写成了两层结果：
 
@@ -1645,7 +1765,8 @@ mixture 校准失败或成功。
 - 100 个 null seeds 都稳定；
 - scalar 在不同 seeds 下都能被正确恢复；
 - continuous rank=2 在不同 seeds 下都能被正确恢复；
-- mixture 3 类和 ARI 能被正确恢复；
+- 多 seed 下是否仍表现为三个主要类别加近空余类；
+- 结构分层 shortlist 后，完整训练的 K3 是否会胜过 K4；
 - density recovery 能通过；
 - 整体 calibration 已通过。
 
@@ -1661,7 +1782,13 @@ mixture 校准失败或成功。
 | 单次 continuous recovery | 已由 RUN_007 实跑确认 |
 | M1b 微小收益边界规则 | 已由 RUN_006 诊断、RUN_007 复验 |
 | 多 seed continuous recovery | 未验证 |
-| mixture recovery | 未验证 |
+| 单次 mixture verdict | RUN_008 正确选择 mixture |
+| 单次 mixture truth ARI | median 0.990、聚合拟合 0.997 |
+| 单次 mixture stability ARI | 0.999，明显超过 0.70 |
+| mixture 精确类别数 | 严格未通过：三折均选择 4，目标为 3 |
+| mixture 有效类别数 | 3；第四类权重 0.15%，按 10% 门槛为近空类 |
+| simulation 跨折聚合 | 已与生产流水线对齐，并由 RUN_009 实跑确认 |
+| 多 seed mixture recovery | 未验证 |
 | density recovery | 未验证 |
 | 完整 calibration | 未通过 |
 | 正式 Safety 修订验证 | 尚未开始 |
@@ -1676,7 +1803,7 @@ mixture 校准失败或成功。
 本文档编写前完整测试结果：
 
 ```text
-43 passed
+50 passed
 ```
 
 测试覆盖：
@@ -1695,15 +1822,18 @@ mixture 校准失败或成功。
 - null 边界语义；
 - M1b 统计改善与实际改善双 gate；
 - 高 `style_l2` 的审慎 M1a 折叠；
-- RUN_005–007 pilot 配置。
+- mixture 候选分数与标准误诊断；
+- simulation/production 跨折众数聚合一致性；
+- 严格 recovery 与有效类别 recovery 并行报告；
+- RUN_005–009 pilot 配置。
 
 测试通过不等于科学结论通过，但能减少代码行为与预期不一致。
 
 ### 20.2 当前 Git 状态
 
-本次归档以前一工程基线 `a01d265` 为起点。包含本文档的提交将归档
-RUN_005–007 的代码、配置、测试和小型 JSON 结果；日志、原始数据和
-凭据不进入 Git。
+当前已提交工程基线是 `273c070`。RUN_008/009 配置、脚本、测试、
+结构化 JSON 结果、严格/有效双标准和本文档修改将在下一提交归档；
+运行日志、原始数据和凭据不进入 Git。
 
 在执行正式长运行前，应：
 
@@ -1722,18 +1852,21 @@ RUN_005–007 的代码、配置、测试和小型 JSON 结果；日志、原始
 - Windows WDDM 占用显存并带来波动；
 - 运行日志仍不进入 Git，小型结构化 JSON artifacts 进入 Git；
 - RUN_001 缺少完整输入 hash 与环境归档；
-- RUN_004–007 的 summary、progress、checkpoint 和 model recovery
+- RUN_004–009 的 summary、progress、checkpoint 和 model recovery
   可用于审计，但每个机制仍只有一个 seed；
 - RUN_007 在代码提交前运行，因此其 provenance 记录的 Git commit
   仍是 `a01d265`，实际工作树由 checkpoint 中的
   `code_hash=fb586e13...` 区分；包含本规则的后续提交将成为新的代码基线；
+- RUN_008/009 provenance 记录 `273c070`，RUN_009 的实际工作树另由
+  `code_hash=2bcb26fd...` 区分；本次提交后多 seed 将使用新基线；
+- 结构分层 shortlist 尚未实现，K3 在 RUN_009 中没有进入完整 refinement；
 - 真实数据分析曾影响后续方法修订，因此下一次仍属于内部修订验证，不是全新的外部确认。
 
 ---
 
 ## 21. 推荐的下一步顺序
 
-### 阶段 A：完成 null、scalar 与 continuous 单次 pilot（已完成）
+### 阶段 A：完成四种机制的单次 pilot（诊断阶段已完成）
 
 RUN_004 已确认：
 
@@ -1746,31 +1879,77 @@ RUN_004 已确认：
 7. config hash、code hash、summary、progress 和 checkpoint 均已生成。
 
 RUN_005 又确认 scalar，RUN_006/007 完成 continuous 诊断与规则复验。
-这些结果应归档，但不能替代多 seed 校准。
+RUN_008 正确选择 mixture，RUN_009 确认三折都选择 4 类，但其中第四类
+接近空类。这些结果应归档，但不能替代多 seed 校准。
 
-### 阶段 B：低成本多 seed null
+### 阶段 B：修正 simulation 跨折聚合与诊断（已实现）
 
-单次 seed 不足以估计假阳性率。
+目标是让合成恢复与生产流水线使用相同的模型规格聚合语义，并让下一次
+失败能够定位到具体 fold 和候选分数。
 
-先设计低保真 3–5 seed screening：
+必须完成：
+
+- 保存每个 outer fold 的 baseline、rank、class count 和 L2；
+- 用跨折众数而不是 `selections[-1]` 确定最终类别数；
+- 保存每折 truth ARI，而不是只保留最后一折；
+- 保存 mixture 候选的 refinement CV 均值与标准误；
+- 保存最终类别权重；
+- 明确 stability 对应哪一个聚合后规格；
+- 增加单元测试，证明 simulation 与生产聚合一致；
+- 不修改 `selected_classes == 3` 的严格 recovery 目标。
+
+完成条件：
+
+- 新增诊断字段有明确 schema；
+- 旧 checkpoint 因 code hash 不匹配而不会被错误复用；
+- 完整测试通过；
+- null、scalar 和 continuous 的判定规则未被改写。
+
+当前实现状态：
+
+- `_select_mixture` 的生产接口保持原来的 `(classes, l2)`；
+- simulation 可选获取 screening/refinement 候选诊断；
+- 每个候选记录 fold cross-entropy、均值和标准误；
+- 每个 outer fold 记录 baseline、rank、classes、L2、truth ARI 和 class weights；
+- 最终规格使用 `outer_fold_mode`；
+- 聚合规格会在完整合成数据上重拟合并输出
+  `aggregate_fit_truth_ari` 与最终 `class_weights`；
+- 小规模真实拟合 smoke 已确认 3 folds、众数聚合和诊断 JSON 正常；
+- RUN_009 使用新 config hash 和 code hash，不会复用 RUN_008 checkpoint。
+
+### 阶段 C：RUN_009 mixture aggregation pilot（已完成）
+
+使用与 RUN_008 相同的 seed、数据规模、候选网格和统计门槛，只改变
+评估聚合与诊断输出，并使用全新 artifacts 目录。
+
+RUN_009 的严格通过条件原为：
+
+```text
+verdict = SCALAR_REJECTED_MIXTURE
+aggregated selected classes = 3
+median fold truth ARI >= 0.70
+stability ARI >= 0.70
+```
+
+实际结果是三折均为 4，因此严格失败；但第四类只有 0.15%，有效三类、
+ARI 和稳定性均通过。项目从此并行报告严格与有效标准，不删除严格失败。
+
+候选诊断还显示 K3 没有进入完整 refinement。因此多 seed screening 是
+修订性工程筛查；结构分层 shortlist 仍是最终冻结前必须解决的方法债务。
+
+### 阶段 D：低成本多 seed mechanism screening
+
+下一步使用 5 seeds 进行机制 screening：
 
 - 明确标为 engineering/calibration screening；
-- 不作为最终 5% 假阳性率证据；
-- 检查是否出现明显 false heterogeneity；
-- 检查高端边界规则是否稳定。
+- 不作为最终 5% 假阳性率或 80% recovery 证据；
+- 同时覆盖 null、scalar、continuous 和 mixture；
+- 检查规则是否只在 seed 1103 上工作；
+- 同时报告严格 recovery rate 与 effective recovery rate；
+- 记录名义类别数、有效类别数、余类总权重、ARI、耗时和边界频率；
+- 即使 effective status 通过，也不得写成严格 calibration 已通过。
 
-### 阶段 C：完成 mixture pilot
-
-不要一上来跑 4 × 100。
-
-scalar 和 continuous 单次 pilot 已完成。下一步只先验证 mixture：
-
-- mixture 是否恢复 3 类与足够 ARI；
-- 是否错误地选择 continuous；
-- 类别在稳定性重拟合中是否一致；
-- mixture 机制的实际耗时。
-
-### 阶段 D：density pilot
+### 阶段 E：density pilot
 
 验证：
 
@@ -1779,7 +1958,7 @@ scalar 和 continuous 单次 pilot 已完成。下一步只先验证 mixture：
 - SciPy CPU 阶段的真实耗时；
 - density checkpoint。
 
-### 阶段 E：冻结完整 calibration
+### 阶段 F：冻结完整 calibration
 
 在 pilot 全部合理后：
 
@@ -1791,7 +1970,7 @@ scalar 和 continuous 单次 pilot 已完成。下一步只先验证 mixture：
 - 执行完整 repetitions；
 - 不根据中途结果修改门槛。
 
-### 阶段 F：只运行 Safety 修订验证
+### 阶段 G：只运行 Safety 修订验证
 
 完整 calibration 通过后，先运行 Safety，而不是立即六维。
 
@@ -1804,7 +1983,7 @@ scalar 和 continuous 单次 pilot 已完成。下一步只先验证 mixture：
 - mixture 稳定性是否达到阈值；
 - 参数尺度是否合理。
 
-### 阶段 G：复制维度与 CUSP
+### 阶段 H：复制维度与 CUSP
 
 只有 Safety 审计通过后：
 
@@ -2010,7 +2189,7 @@ null 的真实图片效用是 0。
 
 ## 25. 最终状态声明
 
-截至 2026-07-31：
+截至 2026-08-01：
 
 1. 数据已经成功获取、清洗、验证和划分；
 2. 首轮真实 CUDA 六维运行已经完成，但只属于 `RUN_001_DIAGNOSTIC`；
@@ -2024,8 +2203,13 @@ null 的真实图片效用是 0。
 10. RUN_005 已确认单次 scalar recovery；
 11. RUN_006 识别出 continuous，但暴露 M1b 微小收益边界问题；
 12. RUN_007 在保持预测证据几乎不变的情况下正确恢复 rank-2 continuous；
-13. mixture、多 seed 与 density 的完整校准尚未完成；
-14. 因此完整 calibration 尚未通过，正式 Safety 修订验证尚未开始。
+13. RUN_008 正确判定 mixture，truth ARI 为 0.979、stability ARI 为 0.999；
+14. RUN_009 确认三折均选择名义 4 类，但第四类权重仅 0.15%；
+15. RUN_009 median truth ARI 为 0.990、聚合拟合 ARI 为 0.997；
+16. mixture 严格精确类数恢复仍失败，有效三类结构通过修订标准；
+17. 严格与有效 recovery 将并行报告，不能用有效通过覆盖严格失败；
+18. 多 seed 与 density 的完整校准尚未完成；
+19. 因此完整 calibration 尚未通过，正式 Safety 修订验证尚未开始。
 
 一句话总结：
 
@@ -2046,10 +2230,14 @@ null 的真实图片效用是 0。
 | `configs/calibration_scalar_pilot_cuda.yaml` | RUN_005 scalar pilot |
 | `configs/calibration_continuous_pilot_cuda.yaml` | RUN_006 continuous 诊断 |
 | `configs/calibration_continuous_rule_pilot_cuda.yaml` | RUN_007 continuous 规则复验 |
+| `configs/calibration_mixture_pilot_cuda.yaml` | RUN_008 mixture pilot |
+| `configs/calibration_mixture_aggregation_pilot_cuda.yaml` | RUN_009 跨折聚合复验 |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
 | `scripts/run_continuous_rule_pilot.ps1` | RUN_007 启动脚本 |
+| `scripts/run_mixture_calibration_pilot.ps1` | RUN_008 启动脚本 |
+| `scripts/run_mixture_aggregation_pilot.ps1` | RUN_009 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint 与 null assessment |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -2063,3 +2251,5 @@ null 的真实图片效用是 0。
 | `artifacts/run_005_scalar_calibration_pilot/` | scalar 恢复 pilot |
 | `artifacts/run_006_continuous_calibration_pilot/` | continuous 边界诊断 |
 | `artifacts/run_007_continuous_rule_pilot/` | continuous 规则复验 |
+| `artifacts/run_008_mixture_calibration_pilot/` | mixture 类别数诊断 |
+| `artifacts/run_009_mixture_aggregation_pilot/` | mixture 跨折聚合与空余类诊断 |

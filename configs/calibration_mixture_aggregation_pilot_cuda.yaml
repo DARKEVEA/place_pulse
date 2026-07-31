@@ -1,0 +1,10 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  model_repetitions: 1
+  model_mechanisms: ["mixture"]
+  repetitions: 1
+
+reporting:
+  artifacts_dir: artifacts/run_009_mixture_aggregation_pilot
+  run_label: RUN_009_MIXTURE_AGGREGATION_PILOT

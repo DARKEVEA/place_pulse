@@ -1,0 +1,69 @@
+{
+  "status": "failed",
+  "mechanisms": [
+    "mixture"
+  ],
+  "recovery_rates": {
+    "mixture": 0.0
+  },
+  "scalar_false_rejection_rate": 0.0,
+  "median_mixture_truth_ari": 0.9791411148527236,
+  "repetitions": 1,
+  "details": [
+    {
+      "mechanism": "mixture",
+      "verdict": "SCALAR_REJECTED_MIXTURE",
+      "gates": {
+        "continuous_predictive_gate": true,
+        "continuous_edge_predictive_gate": true,
+        "baseline_predictive_gate": true,
+        "simulation_gate": true,
+        "selection_boundary_gate": true,
+        "baseline_reduction": 0.12259153119050752,
+        "mixture_predictive_gate": true,
+        "mixture_edge_predictive_gate": true,
+        "continuous_auxiliary_gate": true,
+        "mixture_auxiliary_gate": true,
+        "stable_class_gate": true,
+        "mixture_preferred_to_continuous": true,
+        "continuous_reduction": 0.17859450602274826,
+        "mixture_reduction": 0.20064591792827013
+      },
+      "baseline_selection": {
+        "name": "m1a",
+        "utility_l2": 0.1,
+        "style_l2": 100.0,
+        "response_styles": false,
+        "m1b_improvement": -0.00010518232981363933,
+        "m1b_improvement_se": 1.223809466646112e-05,
+        "m1b_relative_improvement": -0.00011608768791173688,
+        "m1b_statistical_gate": false,
+        "m1b_practical_gate": false,
+        "m1b_high_regularisation_collapse": false,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "selected_rank": 2,
+      "selected_continuous_l2": 1.0,
+      "selected_classes": 4,
+      "selected_mixture_l2": 0.1,
+      "stability_ari": 0.9988905726173904,
+      "truth_ari": 0.9791411148527236,
+      "repetition": 0,
+      "recovery_assessment": {
+        "recovered": false,
+        "reason": "mixture_structure_not_recovered",
+        "target_verdict": "SCALAR_REJECTED_MIXTURE",
+        "raw_verdict": "SCALAR_REJECTED_MIXTURE"
+      }
+    }
+  ],
+  "provenance": {
+    "created_at": "2026-07-31T08:01:28.108040+00:00",
+    "config_hash": "41222b19b659c52527a440275d938df5bb21e5bf55d70a63652ae7a9fe60122b",
+    "git_commit": "273c07092e17faf13701229c883e3de1afda6b94",
+    "seed": 1103,
+    "inputs": {},
+    "run_label": "RUN_008_MIXTURE_CALIBRATION_PILOT"
+  }
+}

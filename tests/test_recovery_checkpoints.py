@@ -63,6 +63,69 @@ def test_continuous_rule_pilot_configuration():
     )
 
 
+def test_mixture_pilot_configuration():
+    config = load_config("configs/calibration_mixture_pilot_cuda.yaml")
+
+    assert config["simulation"]["model_mechanisms"] == ["mixture"]
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_008_mixture_calibration_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_008_MIXTURE_CALIBRATION_PILOT"
+    )
+
+
+def test_mixture_aggregation_pilot_configuration():
+    config = load_config(
+        "configs/calibration_mixture_aggregation_pilot_cuda.yaml"
+    )
+
+    assert config["simulation"]["model_mechanisms"] == ["mixture"]
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_009_mixture_aggregation_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_009_MIXTURE_AGGREGATION_PILOT"
+    )
+
+
+def test_recovery_selection_aggregation_uses_outer_fold_modes():
+    def selection(fold, classes, mixture_l2, rank, continuous_l2):
+        return {
+            "fold": fold,
+            "baseline": {
+                "name": "m1a",
+                "utility_l2": 0.1,
+                "style_l2": 100.0,
+                "response_styles": False,
+                "selection_boundary": False,
+                "selection_boundary_parameters": [],
+            },
+            "continuous_rank": rank,
+            "continuous_l2": continuous_l2,
+            "mixture_classes": classes,
+            "mixture_l2": mixture_l2,
+            "continuous_selection_boundary": False,
+            "mixture_selection_boundary": False,
+        }
+
+    aggregated = recovery._aggregate_recovery_selections(
+        [
+            selection(0, 3, 0.1, 2, 1.0),
+            selection(1, 4, 1.0, 3, 10.0),
+            selection(2, 3, 0.1, 2, 1.0),
+        ]
+    )
+
+    assert aggregated["baseline"]["name"] == "m1a"
+    assert aggregated["continuous_rank"] == 2
+    assert aggregated["continuous_l2"] == 1.0
+    assert aggregated["mixture_classes"] == 3
+    assert aggregated["mixture_l2"] == 0.1
+
+
 def test_model_recovery_resumes_completed_repetitions(tmp_path, monkeypatch):
     config = _checkpoint_config(tmp_path)
     calls = []
@@ -254,3 +317,72 @@ def test_null_boundary_with_predictive_gain_is_not_recovered():
     )
 
     assert not assessment["recovered"]
+
+
+def test_mixture_effective_recovery_does_not_replace_strict_recovery():
+    config = load_config("configs/smoke.yaml")
+    item = {
+        "verdict": "SCALAR_REJECTED_MIXTURE",
+        "selected_classes": 4,
+        "effective_classes": 3,
+        "truth_ari": 0.99,
+        "stability_ari": 0.99,
+    }
+
+    assessment = recovery._model_recovery_assessment(
+        config, "mixture", "SCALAR_REJECTED_MIXTURE", item
+    )
+
+    assert not assessment["recovered"]
+    assert not assessment["strict_recovered"]
+    assert assessment["reason"] == "mixture_structure_not_recovered"
+    assert assessment["effective_recovered"]
+    assert assessment["effective_reason"] == (
+        "effective_mixture_structure_recovered"
+    )
+
+
+def test_mixture_effective_recovery_still_requires_stability():
+    config = load_config("configs/smoke.yaml")
+    item = {
+        "verdict": "SCALAR_REJECTED_MIXTURE",
+        "selected_classes": 4,
+        "effective_classes": 3,
+        "truth_ari": 0.99,
+        "stability_ari": 0.0,
+    }
+
+    assessment = recovery._model_recovery_assessment(
+        config, "mixture", "SCALAR_REJECTED_MIXTURE", item
+    )
+
+    assert not assessment["strict_recovered"]
+    assert not assessment["effective_recovered"]
+
+
+def test_model_recovery_reports_strict_and_effective_rates(
+    tmp_path, monkeypatch
+):
+    config = _checkpoint_config(tmp_path)
+    config["simulation"]["model_repetitions"] = 1
+    config["simulation"]["model_mechanisms"] = ["mixture"]
+
+    monkeypatch.setattr(
+        recovery,
+        "_model_recovery_once",
+        lambda *args, **kwargs: {
+            "mechanism": "mixture",
+            "verdict": "SCALAR_REJECTED_MIXTURE",
+            "selected_classes": 4,
+            "effective_classes": 3,
+            "truth_ari": 0.99,
+            "stability_ari": 0.99,
+        },
+    )
+
+    result = recovery.validate_model_recovery(config)
+
+    assert result["status"] == "failed"
+    assert result["effective_status"] == "ok"
+    assert result["recovery_rates"] == {"mixture": 0.0}
+    assert result["effective_recovery_rates"] == {"mixture": 1.0}

@@ -6,6 +6,7 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
+from statistics import mode
 from typing import Any
 
 import numpy as np
@@ -295,6 +296,82 @@ def _synthetic_frame(
     return frame, truth
 
 
+def _aggregate_recovery_selections(
+    selections: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Aggregate simulation choices with the production pipeline semantics."""
+    baseline_name = mode(
+        item["baseline"]["name"] for item in selections
+    )
+    matching_baselines = [
+        item["baseline"]
+        for item in selections
+        if item["baseline"]["name"] == baseline_name
+    ]
+    baseline = dict(matching_baselines[-1])
+    baseline.update(
+        {
+            "name": baseline_name,
+            "utility_l2": mode(
+                item["utility_l2"] for item in matching_baselines
+            ),
+            "style_l2": mode(
+                item["style_l2"] for item in matching_baselines
+            ),
+            "response_styles": baseline_name == "m1b",
+        }
+    )
+    boundary_parameters = {
+        parameter
+        for item in matching_baselines
+        for parameter in item.get(
+            "selection_boundary_parameters", []
+        )
+    }
+    if any(item["continuous_selection_boundary"] for item in selections):
+        boundary_parameters.add("continuous_l2")
+    if any(item["mixture_selection_boundary"] for item in selections):
+        boundary_parameters.add("mixture_l2")
+    baseline["selection_boundary"] = (
+        any(
+            item.get("selection_boundary", False)
+            for item in matching_baselines
+        )
+        or any(
+            item["continuous_selection_boundary"]
+            or item["mixture_selection_boundary"]
+            for item in selections
+        )
+    )
+    baseline["selection_boundary_parameters"] = sorted(
+        boundary_parameters
+    )
+
+    continuous_rank = mode(
+        item["continuous_rank"] for item in selections
+    )
+    continuous_l2 = mode(
+        item["continuous_l2"]
+        for item in selections
+        if item["continuous_rank"] == continuous_rank
+    )
+    mixture_classes = mode(
+        item["mixture_classes"] for item in selections
+    )
+    mixture_l2 = mode(
+        item["mixture_l2"]
+        for item in selections
+        if item["mixture_classes"] == mixture_classes
+    )
+    return {
+        "baseline": baseline,
+        "continuous_rank": int(continuous_rank),
+        "continuous_l2": float(continuous_l2),
+        "mixture_classes": int(mixture_classes),
+        "mixture_l2": float(mixture_l2),
+    }
+
+
 def _model_recovery_once(
     config: dict[str, Any], mechanism: str, seed: int
 ) -> dict[str, Any]:
@@ -319,8 +396,9 @@ def _model_recovery_once(
     assigned = grouped_edge_folds(frame, outer_folds, seed + 7)
     score_sets = {"m0": [], "scalar": [], "continuous": [], "mixture": [], "cluster": []}
     selections = []
-    final_mixture = None
-    final_encoder = None
+    candidate_values = [
+        float(value) for value in config["models"]["l2_candidates"]
+    ]
     for fold in range(outer_folds):
         train = frame.filter(assigned != fold)
         test = _eligible_test(train, frame.filter(assigned == fold))
@@ -328,7 +406,13 @@ def _model_recovery_once(
             continue
         baseline = _select_scalar_baseline(train, config, device)
         rank, continuous_l2 = _select_continuous(train, config, device, baseline)
-        classes, mixture_l2 = _select_mixture(train, config, device, baseline)
+        classes, mixture_l2, mixture_selection = _select_mixture(
+            train,
+            config,
+            device,
+            baseline,
+            return_diagnostics=True,
+        )
         encoder = VoteEncoder().fit(train)
         encoded_train = encoder.transform(train, device)
         encoded_test = encoder.transform(test, device)
@@ -369,8 +453,33 @@ def _model_recovery_once(
             log_score(mixture.predict_proba(encoded_test), choices)
         )
         score_sets["cluster"].append(_cluster_array(test))
-        selections.append((baseline, rank, continuous_l2, classes, mixture_l2))
-        final_mixture, final_encoder = mixture, encoder
+        predicted = mixture.posterior.argmax(1)
+        actual = np.asarray([truth[x] for x in encoder.voter_ids])
+        selections.append(
+            {
+                "fold": fold,
+                "baseline": baseline,
+                "continuous_rank": int(rank),
+                "continuous_l2": float(continuous_l2),
+                "mixture_classes": int(classes),
+                "mixture_l2": float(mixture_l2),
+                "continuous_selection_boundary": (
+                    len(candidate_values) > 1
+                    and float(continuous_l2)
+                    in {min(candidate_values), max(candidate_values)}
+                ),
+                "mixture_selection_boundary": (
+                    len(candidate_values) > 1
+                    and float(mixture_l2)
+                    in {min(candidate_values), max(candidate_values)}
+                ),
+                "truth_ari": float(
+                    adjusted_rand_score(actual, predicted)
+                ),
+                "class_weights": mixture.class_weights().tolist(),
+                "mixture_selection": mixture_selection,
+            }
+        )
     if not selections:
         return {"mechanism": mechanism, "verdict": "MODEL_CALIBRATION_FAILED"}
     values = {name: np.concatenate(items) for name, items in score_sets.items()}
@@ -379,7 +488,12 @@ def _model_recovery_once(
         "repetitions": config["gates"]["elpd_bootstrap"],
         "seed": seed,
     }
-    baseline, rank, continuous_l2, classes, mixture_l2 = selections[-1]
+    aggregate = _aggregate_recovery_selections(selections)
+    baseline = aggregate["baseline"]
+    rank = aggregate["continuous_rank"]
+    continuous_l2 = aggregate["continuous_l2"]
+    classes = aggregate["mixture_classes"]
+    mixture_l2 = aggregate["mixture_l2"]
     scalar_ci = clustered_elpd_bootstrap(
         values["scalar"], values["m0"], clusters, **ci_kwargs
     )
@@ -389,11 +503,35 @@ def _model_recovery_once(
     mixture_ci = clustered_elpd_bootstrap(
         values["mixture"], values["scalar"], clusters, **ci_kwargs
     )
-    truth_ari = 0.0
-    if final_mixture is not None and final_encoder is not None:
-        predicted = final_mixture.posterior.argmax(1)
-        actual = np.asarray([truth[x] for x in final_encoder.voter_ids])
-        truth_ari = float(adjusted_rand_score(actual, predicted))
+    truth_ari = float(
+        np.median([item["truth_ari"] for item in selections])
+    )
+    full_encoder = VoteEncoder().fit(frame)
+    encoded_full = full_encoder.transform(frame, device)
+    final_mixture = _best_mixture_fit(
+        encoded_full,
+        config,
+        baseline,
+        classes,
+        mixture_l2,
+        seed + 9000,
+        selection=False,
+    )
+    aggregate_predicted = final_mixture.posterior.argmax(1)
+    aggregate_actual = np.asarray(
+        [truth[x] for x in full_encoder.voter_ids]
+    )
+    aggregate_fit_truth_ari = float(
+        adjusted_rand_score(aggregate_actual, aggregate_predicted)
+    )
+    class_weights = final_mixture.class_weights().tolist()
+    minimum_class_weight = float(config["gates"]["min_class_weight"])
+    effective_classes = sum(
+        weight >= minimum_class_weight for weight in class_weights
+    )
+    redundant_class_weight = float(
+        sum(weight for weight in class_weights if weight < minimum_class_weight)
+    )
     edge_gates = edge_predictive_gates(
         config,
         float(-values["m0"].mean()),
@@ -427,7 +565,7 @@ def _model_recovery_once(
         continuous_ci,
         mixture_ci,
         scalar_ci,
-        final_mixture.class_weights().tolist(),
+        class_weights,
         ranking_reversal_fraction(final_mixture.utilities()),
         bootstrap_stability,
         True,
@@ -477,6 +615,13 @@ def _model_recovery_once(
         "selected_mixture_l2": float(mixture_l2),
         "stability_ari": bootstrap_stability,
         "truth_ari": truth_ari,
+        "aggregate_fit_truth_ari": aggregate_fit_truth_ari,
+        "class_weights": class_weights,
+        "effective_classes": int(effective_classes),
+        "redundant_class_weight": redundant_class_weight,
+        "effective_class_weight_threshold": minimum_class_weight,
+        "selection_aggregation": "outer_fold_mode",
+        "outer_fold_selections": selections,
     }
 
 
@@ -559,9 +704,29 @@ def _model_recovery_assessment(
         )
         if not recovered:
             reason = "mixture_structure_not_recovered"
+    strict_recovered = bool(recovered)
+    effective_recovered = strict_recovered
+    effective_reason = reason
+    if mechanism == "mixture" and not strict_recovered:
+        effective_classes = item.get(
+            "effective_classes", item.get("selected_classes")
+        )
+        effective_recovered = (
+            item.get("verdict") == target_verdict
+            and effective_classes == 3
+            and item.get("truth_ari", 0.0)
+            >= config["gates"]["min_ari"]
+            and item.get("stability_ari", 0.0)
+            >= config["gates"]["min_ari"]
+        )
+        if effective_recovered:
+            effective_reason = "effective_mixture_structure_recovered"
     return {
-        "recovered": bool(recovered),
+        "recovered": strict_recovered,
+        "strict_recovered": strict_recovered,
+        "effective_recovered": bool(effective_recovered),
         "reason": reason,
+        "effective_reason": effective_reason,
         "target_verdict": target_verdict,
         "raw_verdict": item.get("verdict"),
     }
@@ -597,9 +762,11 @@ def validate_model_recovery(
     }
     details = []
     rates = {}
+    effective_rates = {}
     total = len(expected) * repetitions
     for mechanism, target in expected.items():
         matches = 0
+        effective_matches = 0
         for repetition in range(repetitions):
             cached = (
                 _load_repetition_checkpoint(
@@ -647,7 +814,13 @@ def validate_model_recovery(
                 status="running",
             )
             matches += item["recovery_assessment"]["recovered"]
+            effective_matches += item["recovery_assessment"][
+                "effective_recovered"
+            ]
         rates[mechanism] = matches / max(repetitions, 1)
+        effective_rates[mechanism] = (
+            effective_matches / max(repetitions, 1)
+        )
     scalar_false_rejection = sum(
         item["mechanism"] == "scalar"
         and item["verdict"]
@@ -668,6 +841,11 @@ def validate_model_recovery(
         >= (0.95 if mechanism == "null" else recovery_min)
         for mechanism in mechanisms
     )
+    effective_recovery_ok = all(
+        effective_rates[mechanism]
+        >= (0.95 if mechanism == "null" else recovery_min)
+        for mechanism in mechanisms
+    )
     mixture_ok = (
         "mixture" not in mechanisms
         or (
@@ -682,8 +860,14 @@ def validate_model_recovery(
     )
     result = {
         "status": "ok" if recovery_ok and mixture_ok and scalar_ok else "failed",
+        "effective_status": (
+            "ok"
+            if effective_recovery_ok and mixture_ok and scalar_ok
+            else "failed"
+        ),
         "mechanisms": mechanisms,
         "recovery_rates": rates,
+        "effective_recovery_rates": effective_rates,
         "scalar_false_rejection_rate": scalar_false_rejection,
         "median_mixture_truth_ari": median_mixture_truth_ari,
         "repetitions": repetitions,

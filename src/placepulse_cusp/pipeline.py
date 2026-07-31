@@ -659,10 +659,23 @@ def _select_mixture(
     config: dict[str, Any],
     device: torch.device,
     baseline: dict[str, Any],
-) -> tuple[int, float]:
+    *,
+    return_diagnostics: bool = False,
+) -> tuple[int, float] | tuple[int, float, dict[str, Any]]:
     encoded = _encoded_inner_edge_splits(train, config, device, 193)
     if not encoded:
-        return config["models"]["mixture_classes"][0], config["models"]["l2_candidates"][0]
+        selected = (
+            int(config["models"]["mixture_classes"][0]),
+            float(config["models"]["l2_candidates"][0]),
+        )
+        if return_diagnostics:
+            return *selected, {
+                "selected_classes": selected[0],
+                "selected_l2": selected[1],
+                "screening": [],
+                "refinement": [],
+            }
+        return selected
     candidates = [
         (classes, float(l2))
         for classes in config["models"]["mixture_classes"]
@@ -670,7 +683,9 @@ def _select_mixture(
     ]
     starts = max(1, int(config["models"].get("random_starts", 1)))
 
-    def evaluate(candidate, candidate_starts: int, *, screening: bool = False) -> float:
+    def evaluate(
+        candidate, candidate_starts: int, *, screening: bool = False
+    ) -> dict[str, Any]:
         classes, l2 = candidate
         values = []
         for fold, (encoded_train, encoded_val) in enumerate(encoded):
@@ -687,18 +702,53 @@ def _select_mixture(
             values.append(
                 cross_entropy(model.predict_proba(encoded_val), _choice_array(encoded_val))
             )
-        return float(np.mean(values))
+        scores = np.asarray(values, dtype=float)
+        standard_error = (
+            float(scores.std(ddof=1) / np.sqrt(len(scores)))
+            if len(scores) > 1
+            else 0.0
+        )
+        return {
+            "classes": int(classes),
+            "l2": float(l2),
+            "mean_cross_entropy": float(scores.mean()),
+            "standard_error": standard_error,
+            "fold_cross_entropy": scores.tolist(),
+        }
 
     if starts > 1 and len(candidates) > starts:
-        screening_scores = {
+        screening_results = {
             candidate: evaluate(candidate, 1, screening=True)
             for candidate in candidates
         }
-        shortlist = sorted(screening_scores, key=screening_scores.get)[:starts]
-        scores = {candidate: evaluate(candidate, starts) for candidate in shortlist}
+        shortlist = sorted(
+            screening_results,
+            key=lambda candidate: screening_results[candidate][
+                "mean_cross_entropy"
+            ],
+        )[:starts]
+        refinement_results = {
+            candidate: evaluate(candidate, starts) for candidate in shortlist
+        }
     else:
-        scores = {candidate: evaluate(candidate, starts) for candidate in candidates}
-    return min(scores, key=scores.get)
+        screening_results = {}
+        refinement_results = {
+            candidate: evaluate(candidate, starts) for candidate in candidates
+        }
+    selected = min(
+        refinement_results,
+        key=lambda candidate: refinement_results[candidate][
+            "mean_cross_entropy"
+        ],
+    )
+    if return_diagnostics:
+        return *selected, {
+            "selected_classes": int(selected[0]),
+            "selected_l2": float(selected[1]),
+            "screening": list(screening_results.values()),
+            "refinement": list(refinement_results.values()),
+        }
+    return selected
 
 
 def run_dimension(

@@ -238,6 +238,63 @@ def test_mixture_grid_uses_full_starts_only_for_shortlist(monkeypatch):
     assert selected == (2, 0.1)
 
 
+def test_mixture_selection_can_return_candidate_diagnostics(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"].update(
+        {
+            "mixture_classes": [2, 3],
+            "l2_candidates": [0.1, 1.0],
+            "random_starts": 2,
+        }
+    )
+    encoded = SimpleNamespace(choice=torch.tensor([0]))
+    monkeypatch.setattr(
+        pipeline,
+        "_encoded_inner_edge_splits",
+        lambda *args, **kwargs: [(encoded, encoded), (encoded, encoded)],
+    )
+    monkeypatch.setattr(pipeline, "_choice_array", lambda value: np.asarray([0]))
+    monkeypatch.setattr(
+        pipeline, "cross_entropy", lambda probabilities, choices: float(probabilities[0])
+    )
+
+    def fake_fit(
+        encoded_train,
+        config,
+        baseline,
+        classes,
+        l2,
+        seed,
+        **kwargs,
+    ):
+        return SimpleNamespace(
+            predict_proba=lambda value: np.asarray([classes + l2])
+        )
+
+    monkeypatch.setattr(pipeline, "_best_mixture_fit", fake_fit)
+    classes, l2, diagnostics = pipeline._select_mixture(
+        object(),
+        config,
+        torch.device("cpu"),
+        {"utility_l2": 0.1},
+        return_diagnostics=True,
+    )
+
+    assert (classes, l2) == (2, 0.1)
+    assert diagnostics["selected_classes"] == 2
+    assert diagnostics["selected_l2"] == 0.1
+    assert len(diagnostics["screening"]) == 4
+    assert len(diagnostics["refinement"]) == 2
+    assert all(
+        len(item["fold_cross_entropy"]) == 2
+        for item in diagnostics["refinement"]
+    )
+    assert all(
+        item["standard_error"] == 0.0
+        for item in diagnostics["refinement"]
+    )
+
+
 def test_final_continuous_fit_polishes_only_best_start(monkeypatch):
     config = load_config("configs/smoke.yaml")
     config["models"].update({"random_starts": 3, "lbfgs_steps": 4})
