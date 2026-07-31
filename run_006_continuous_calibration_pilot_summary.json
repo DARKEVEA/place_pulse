@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-07-30T20:15:26.1171343+08:00",
+    "finished_at":  "2026-07-30T20:55:17.8171661+08:00",
+    "elapsed_seconds":  2391.7,
+    "elapsed_minutes":  39.862,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_continuous_pilot_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_006_continuous_calibration_pilot",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_006_continuous_calibration_pilot.log"
+}

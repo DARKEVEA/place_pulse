@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "config_hash": "3381bba20562e4e7454da17412fc9a95392bba6e38215393a7c122905dfbc026",
+  "code_hash": "5011425f5c3ca585629a3722dc445cc3ad7de9e39051e85899eb64fdc170d9c5",
+  "family": "model_recovery",
+  "mechanism": "scalar",
+  "repetition": 0,
+  "result": {
+    "mechanism": "scalar",
+    "verdict": "SCALAR_NOT_REJECTED",
+    "gates": {
+      "continuous_predictive_gate": false,
+      "continuous_edge_predictive_gate": false,
+      "baseline_predictive_gate": true,
+      "simulation_gate": true,
+      "selection_boundary_gate": true,
+      "baseline_reduction": 0.11587951249590848,
+      "mixture_predictive_gate": false,
+      "mixture_edge_predictive_gate": false,
+      "continuous_auxiliary_gate": true,
+      "mixture_auxiliary_gate": true,
+      "stable_class_gate": false,
+      "mixture_preferred_to_continuous": false,
+      "continuous_reduction": -1.8849308761290657e-07,
+      "mixture_reduction": -0.00010480215671277606
+    },
+    "baseline_selection": {
+      "name": "m1a",
+      "utility_l2": 0.1,
+      "style_l2": 100.0,
+      "response_styles": false,
+      "selection_boundary": false,
+      "selection_boundary_parameters": []
+    },
+    "selected_rank": 1,
+    "selected_continuous_l2": 10.0,
+    "selected_classes": 2,
+    "selected_mixture_l2": 10.0,
+    "stability_ari": 0.0,
+    "truth_ari": 1.0,
+    "repetition": 0,
+    "recovery_assessment": {
+      "recovered": true,
+      "reason": "target_verdict",
+      "target_verdict": "SCALAR_NOT_REJECTED",
+      "raw_verdict": "SCALAR_NOT_REJECTED"
+    }
+  }
+}

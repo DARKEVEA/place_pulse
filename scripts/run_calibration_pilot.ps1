@@ -1,18 +1,24 @@
 param(
     [switch]$Resume,
     [int]$MaxGpuUtilization = 30,
-    [int]$MaxGpuMemoryMiB = 4096
+    [int]$MaxGpuMemoryMiB = 4096,
+    [string]$ConfigRelativePath = "configs\calibration_pilot_cuda.yaml",
+    [string]$RunName = "run_004_null_rule_pilot"
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$configPath = Join-Path $repoRoot "configs\calibration_pilot_cuda.yaml"
-$artifactRoot = Join-Path $repoRoot "artifacts\run_004_null_rule_pilot"
-$logPath = Join-Path $repoRoot "run_004_null_rule_pilot.log"
-$summaryPath = Join-Path $repoRoot "run_004_null_rule_pilot_summary.json"
+$resolvedConfigPath = if ([System.IO.Path]::IsPathRooted($ConfigRelativePath)) {
+    $ConfigRelativePath
+} else {
+    Join-Path $repoRoot $ConfigRelativePath
+}
+$artifactRoot = Join-Path $repoRoot "artifacts\$RunName"
+$logPath = Join-Path $repoRoot "$RunName.log"
+$summaryPath = Join-Path $repoRoot "${RunName}_summary.json"
 
-if (-not (Test-Path -LiteralPath $configPath)) {
-    throw "Pilot config not found: $configPath"
+if (-not (Test-Path -LiteralPath $resolvedConfigPath)) {
+    throw "Pilot config not found: $resolvedConfigPath"
 }
 
 if ($env:CONDA_DEFAULT_ENV -ne "arch") {
@@ -55,7 +61,7 @@ $arguments = @(
     "simulate",
     "validate-models",
     "--config",
-    $configPath
+    $resolvedConfigPath
 )
 if ($Resume) {
     $arguments += "--resume"
@@ -85,7 +91,7 @@ $summary = [ordered]@{
     finished_at = $finishedAt.ToString("o")
     elapsed_seconds = [math]::Round($elapsed.TotalSeconds, 3)
     elapsed_minutes = [math]::Round($elapsed.TotalMinutes, 3)
-    config = $configPath
+    config = $resolvedConfigPath
     artifacts = $artifactRoot
     log = $logPath
 }

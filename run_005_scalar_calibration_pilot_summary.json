@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-07-30T18:15:02.4033336+08:00",
+    "finished_at":  "2026-07-30T18:29:15.8010784+08:00",
+    "elapsed_seconds":  853.398,
+    "elapsed_minutes":  14.223,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_scalar_pilot_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_005_scalar_calibration_pilot",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_005_scalar_calibration_pilot.log"
+}

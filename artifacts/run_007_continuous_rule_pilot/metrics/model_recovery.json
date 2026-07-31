@@ -1,0 +1,69 @@
+{
+  "status": "ok",
+  "mechanisms": [
+    "continuous"
+  ],
+  "recovery_rates": {
+    "continuous": 1.0
+  },
+  "scalar_false_rejection_rate": 0.0,
+  "median_mixture_truth_ari": null,
+  "repetitions": 1,
+  "details": [
+    {
+      "mechanism": "continuous",
+      "verdict": "SCALAR_REJECTED_CONTINUOUS",
+      "gates": {
+        "continuous_predictive_gate": true,
+        "continuous_edge_predictive_gate": true,
+        "baseline_predictive_gate": true,
+        "simulation_gate": true,
+        "selection_boundary_gate": true,
+        "baseline_reduction": 0.07167501788479465,
+        "mixture_predictive_gate": true,
+        "mixture_edge_predictive_gate": true,
+        "continuous_auxiliary_gate": true,
+        "mixture_auxiliary_gate": true,
+        "stable_class_gate": false,
+        "mixture_preferred_to_continuous": false,
+        "continuous_reduction": 0.12495935827911794,
+        "mixture_reduction": 0.0691878802424771
+      },
+      "baseline_selection": {
+        "name": "m1a",
+        "utility_l2": 1.0,
+        "style_l2": 100.0,
+        "response_styles": false,
+        "m1b_improvement": 9.695688883463542e-05,
+        "m1b_improvement_se": 1.875875164934195e-05,
+        "m1b_relative_improvement": 9.895694513096952e-05,
+        "m1b_statistical_gate": true,
+        "m1b_practical_gate": false,
+        "m1b_high_regularisation_collapse": true,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "selected_rank": 2,
+      "selected_continuous_l2": 1.0,
+      "selected_classes": 5,
+      "selected_mixture_l2": 1.0,
+      "stability_ari": 0.4233514080785203,
+      "truth_ari": 0.0,
+      "repetition": 0,
+      "recovery_assessment": {
+        "recovered": true,
+        "reason": "target_verdict",
+        "target_verdict": "SCALAR_REJECTED_CONTINUOUS",
+        "raw_verdict": "SCALAR_REJECTED_CONTINUOUS"
+      }
+    }
+  ],
+  "provenance": {
+    "created_at": "2026-07-31T06:44:47.598856+00:00",
+    "config_hash": "25f6b39d5828858fececc72f0d8523544703ec290e5bdee0af2dba57391a0275",
+    "git_commit": "a01d265c8c529c401deac3b028c7e628290dc1e0",
+    "seed": 1103,
+    "inputs": {},
+    "run_label": "RUN_007_CONTINUOUS_RULE_PILOT"
+  }
+}

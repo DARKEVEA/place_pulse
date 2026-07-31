@@ -22,6 +22,47 @@ def test_null_pilot_configuration():
     assert config["models"]["l2_candidates"][-1] == 100.0
 
 
+def test_scalar_pilot_configuration():
+    config = load_config("configs/calibration_scalar_pilot_cuda.yaml")
+
+    assert config["simulation"]["model_mechanisms"] == ["scalar"]
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_005_scalar_calibration_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_005_SCALAR_CALIBRATION_PILOT"
+    )
+
+
+def test_continuous_pilot_configuration():
+    config = load_config("configs/calibration_continuous_pilot_cuda.yaml")
+
+    assert config["simulation"]["model_mechanisms"] == ["continuous"]
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_006_continuous_calibration_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_006_CONTINUOUS_CALIBRATION_PILOT"
+    )
+
+
+def test_continuous_rule_pilot_configuration():
+    config = load_config(
+        "configs/calibration_continuous_rule_pilot_cuda.yaml"
+    )
+
+    assert config["simulation"]["model_mechanisms"] == ["continuous"]
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_007_continuous_rule_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_007_CONTINUOUS_RULE_PILOT"
+    )
+
+
 def test_model_recovery_resumes_completed_repetitions(tmp_path, monkeypatch):
     config = _checkpoint_config(tmp_path)
     calls = []

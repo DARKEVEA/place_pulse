@@ -1,0 +1,10 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  model_repetitions: 1
+  model_mechanisms: ["continuous"]
+  repetitions: 1
+
+reporting:
+  artifacts_dir: artifacts/run_007_continuous_rule_pilot
+  run_label: RUN_007_CONTINUOUS_RULE_PILOT

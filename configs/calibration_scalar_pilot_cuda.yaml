@@ -1,0 +1,10 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  model_repetitions: 1
+  model_mechanisms: ["scalar"]
+  repetitions: 1
+
+reporting:
+  artifacts_dir: artifacts/run_005_scalar_calibration_pilot
+  run_label: RUN_005_SCALAR_CALIBRATION_PILOT

@@ -9,10 +9,10 @@
 | 项目名称 | Place Pulse CUSP |
 | 文档语言 | 中文 |
 | 目标读者 | 没有机器学习、统计学或软件工程背景的读者，以及需要接手项目的开发者 |
-| 文档快照日期 | 2026-07-30 |
+| 文档快照日期 | 2026-07-31 |
 | 当前代码分支 | `main` |
-| 当前已提交版本 | `7f64624`（`review for speed`） |
-| 当前工作区 | 在已提交版本之上仍有尚未提交的校准、checkpoint、测试和文档修改 |
+| 本次归档前基线 | `a01d265`（`calibration: add resumable recovery and null pilot validation`） |
+| 当前归档范围 | RUN_005–007 的规则、配置、脚本、测试、文档和小型 JSON 结果 |
 | 当前科学状态 | 校准尚未全部通过；不能把首轮真实数据输出当作最终确认性结论 |
 
 ## 推荐阅读路线
@@ -26,7 +26,7 @@
 1. 第 1 节“一页摘要”；
 2. 第 2 节“生活化例子”；
 3. 第 9 节“统计闸门”；
-4. 第 17 节“RUN_002、RUN_003 与 RUN_004”；
+4. 第 17 节“RUN_002 至 RUN_007”；
 5. 第 19 节“当前校准结论”；
 6. 第 25 节“最终状态声明”。
 
@@ -116,7 +116,10 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 - 多保真候选搜索优化；
 - fold 和 repetition 两层 checkpoint；
 - 单次 null 负对照 pilot 的性能测量与规则诊断；
-- RUN_004 对 null 高正则化边界 recovery 规则的实际验证。
+- RUN_004 对 null 高正则化边界 recovery 规则的实际验证；
+- RUN_005 对 scalar 机制的单次恢复验证；
+- RUN_006 对 continuous 机制中 M1b 风格边界问题的诊断；
+- RUN_007 对“统计显著但实际收益可忽略”规则的复验。
 
 但还没有完成：
 
@@ -128,7 +131,9 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 
 因此，当前最准确的总状态是：
 
-> **工程流水线已经能运行，null 负对照的实际模型行为符合预期，但整套校准尚未完成，正式科学判断仍应暂缓。**
+> **工程流水线已经能运行，null、scalar 和 continuous 的单次 pilot
+> 符合预期，但 mixture、多 seed 与 density 尚未完成，正式科学判断
+> 仍应暂缓。**
 
 ---
 
@@ -1163,7 +1168,7 @@ SCIENTIFIC_VERDICT_DEFERRED
 
 ### 16.7 速度优化
 
-提交 `7f64624` 和当前工作区进一步优化：
+提交 `7f64624`、`a01d265` 和后续修改进一步优化：
 
 - 所有候选短训练粗筛；
 - 仅 shortlist 使用完整随机起点；
@@ -1175,7 +1180,7 @@ SCIENTIFIC_VERDICT_DEFERRED
 
 ### 16.8 repetition checkpoint
 
-当前未提交修改增加：
+提交 `a01d265` 增加：
 
 - 模型恢复 repetition checkpoint；
 - 密度恢复 repetition checkpoint；
@@ -1187,9 +1192,11 @@ SCIENTIFIC_VERDICT_DEFERRED
 
 ---
 
-## 17. RUN_002、RUN_003 与 RUN_004 的目标和结果
+## 17. RUN_002 至 RUN_007 的目标和结果
 
-这三次不是在真实数据上“调出想要的结果”，而是在合成 null 数据上诊断校准规则和计算成本。
+这些运行不是在真实数据上“调出想要的结果”，而是在已知生成真相的
+合成数据上依次检查 null、scalar 和 continuous 机制，并诊断校准规则
+与计算成本。
 
 ### 17.1 RUN_002 calibration pilot
 
@@ -1279,6 +1286,9 @@ mixture reduction    = -7.996e-6
 | RUN_002 | 6 | 21 分 21 秒 | 基准 |
 | RUN_003 | 7 | 24 分 52 秒 | 慢约 16.5% |
 | RUN_004 | 6 | 16 分 49 秒 | 快约 21.2% |
+| RUN_005 scalar | 6 | 14 分 13 秒 | 快约 33.4% |
+| RUN_006 continuous | 6 | 39 分 52 秒 | 慢约 86.8% |
+| RUN_007 continuous-rule | 6 | 27 分 33 秒 | 慢约 29.1% |
 
 RUN_002 与 RUN_003 的候选数和耗时几乎线性增长，证明候选模型拟合
 是主要成本来源。RUN_004 恢复六点网格后，比 RUN_002 还快约 4 分
@@ -1368,6 +1378,139 @@ mixture L2 = 100
 这些 continuous rank 和 mixture classes 在 null 中没有科学解释价值，
 因为对应预测 gate 都没有通过。`truth_ari=1.0` 也不能解释为成功分群：
 null 生成机制中所有投票者本来就属于同一个退化真类。
+
+### 17.5 RUN_005 scalar calibration pilot
+
+目录：
+
+```text
+artifacts/run_005_scalar_calibration_pilot
+```
+
+目标是检查系统能否在存在共享标量排序、但不存在额外异质性时：
+
+- 建立 M1 相对 M0 的预测优势；
+- 不错误选择 continuous；
+- 不错误选择 mixture；
+- 避免正则化边界。
+
+RUN_005 正常完成，耗时 853.398 秒，即 14 分 13 秒。关键结果：
+
+```text
+verdict = SCALAR_NOT_REJECTED
+recovered = true
+baseline reduction = 11.588%
+continuous reduction = -0.000019%
+mixture reduction = -0.0105%
+baseline = M1a
+utility_l2 = 0.1
+selection boundary = false
+```
+
+标量信号明显超过 `0.5%` 门槛，而 continuous 和 mixture 都没有改善。
+因此该 seed 下系统既识别了共享排序，也没有制造虚假异质性。
+
+`recovery_rate=1.0` 和 `scalar_false_rejection_rate=0.0` 仍然只是一次
+repetition 的结果，不能当作总体概率估计。
+
+### 17.6 RUN_006 continuous calibration pilot
+
+目录：
+
+```text
+artifacts/run_006_continuous_calibration_pilot
+```
+
+RUN_006 的目标是检查系统能否恢复生成时设定的 rank-2 连续异质性。
+它正常运行完毕，耗时 2391.700 秒，即 39 分 52 秒，但正式 recovery
+状态为 `failed`：
+
+```text
+raw verdict = MODEL_CALIBRATION_FAILED
+target verdict = SCALAR_REJECTED_CONTINUOUS
+selected rank = 2
+continuous reduction = 12.481%
+baseline reduction = 7.178%
+```
+
+模型本身正确选中 rank 2，连续模型的留出预测改善也远高于门槛。
+失败来自标量基线：
+
+```text
+baseline = M1b
+utility_l2 = 1
+style_l2 = 100
+response_styles = true
+selection boundary = style_l2
+```
+
+当时只要任意基线正则参数触边，生产 gate 就会返回
+`MODEL_CALIBRATION_FAILED`。因此 RUN_006 暴露的是 M1a/M1b 选择规则
+缺少“实际效果量门槛”，不是 continuous 模型没有恢复能力。
+
+### 17.7 RUN_007 continuous-rule pilot
+
+RUN_007 使用新目录重新训练，没有覆盖或复用 RUN_006：
+
+```text
+artifacts/run_007_continuous_rule_pilot
+```
+
+新规则记录：
+
+- M1b 相对 M1a 的绝对交叉熵改善；
+- 改善的标准误；
+- 相对改善；
+- 统计 gate；
+- 实际效果 gate；
+- 是否因高正则、低实际收益而折叠回 M1a。
+
+规则不是无条件忽略最高 `style_l2`。只有当 M1b 统计上略优、但相对
+改善低于统一的 `0.5%` 实际门槛时，才选择更简单的 M1a；如果改善
+达到 `0.5%`，最高边界仍然保留为失败。
+
+RUN_007 正常完成，耗时 1652.943 秒，即 27 分 33 秒：
+
+```text
+status = ok
+verdict = SCALAR_REJECTED_CONTINUOUS
+recovered = true
+selected rank = 2
+continuous reduction = 12.496%
+```
+
+M1b 诊断为：
+
+```text
+m1b improvement = 9.6957e-5
+m1b improvement SE = 1.8759e-5
+m1b relative improvement = 0.00990%
+statistical gate = true
+practical gate = false
+high-regularisation collapse = true
+```
+
+相对改善只有约 `0.0099%`，比 `0.5%` 门槛小约 50 倍。它在大样本下
+可以统计显著，但预测意义可以忽略，因此折叠回 M1a：
+
+```text
+baseline = M1a
+response_styles = false
+selection boundary = false
+```
+
+RUN_006 与 RUN_007 的主要预测结果几乎没有变化：
+
+| 指标 | RUN_006 | RUN_007 |
+|---|---:|---:|
+| baseline reduction | 7.1785% | 7.1675% |
+| continuous reduction | 12.4810% | 12.4959% |
+| mixture reduction | 6.9162% | 6.9188% |
+| selected rank | 2 | 2 |
+
+这说明 RUN_007 主要修正了无实际意义的 M1b 边界解释，没有削弱或
+制造 continuous 预测证据。混合模型虽然也改善，但改善小于 continuous，
+且 `stability_ari=0.423 < 0.70`，因此没有形成稳定类别解释。
 
 ---
 
@@ -1464,17 +1607,18 @@ recovery 可能超过该范围。
 
 ### 19.1 已经知道的
 
-对 seed 1103 的单次 null：
+对 seed 1103 的单次 null、scalar 和 continuous：
 
-- M1 没有胜过 M0；
-- M2 没有胜过 M1；
-- M3 没有胜过 M1；
-- 没有产生虚假异质性；
-- 模型选择最高正则化，与真实 null 效用为 0 一致。
+- null 中 M1 没有胜过 M0，M2/M3 也没有虚假改善；
+- scalar 中 M1 明显胜过 M0，M2/M3 没有进一步改善；
+- continuous 中 M2 明显胜过 M1，并正确恢复 rank 2；
+- continuous 中 M3 虽有改善，但弱于 M2 且类别不稳定；
+- null 的最高正则化与真实效用为 0 一致；
+- continuous 中无实际意义的 M1b 风格边界已被识别并审慎折叠。
 
 因此：
 
-> 这一个 null seed 的实际模型行为是正确的。
+> 这一个 seed 下的 null、scalar 和 continuous 模型行为均符合生成真相。
 
 RUN_004 将这一事实写成了两层结果：
 
@@ -1495,12 +1639,12 @@ mixture 校准失败或成功。
 
 ### 19.2 还不能知道的
 
-单次 null 不能证明：
+单次机制 pilot 不能证明：
 
 - 假阳性率低于 5%；
 - 100 个 null seeds 都稳定；
-- scalar 能被正确恢复；
-- continuous rank=2 能被正确恢复；
+- scalar 在不同 seeds 下都能被正确恢复；
+- continuous rank=2 在不同 seeds 下都能被正确恢复；
 - mixture 3 类和 ARI 能被正确恢复；
 - density recovery 能通过；
 - 整体 calibration 已通过。
@@ -1512,8 +1656,11 @@ mixture 校准失败或成功。
 | 单次 null 行为 | 符合预期 |
 | null 高正则化边界语义 | 已在代码中修正，并由 RUN_004 实跑确认 |
 | 多 seed null 假阳性率 | 未验证 |
-| scalar recovery | 未验证 |
-| continuous recovery | 未验证 |
+| 单次 scalar recovery | 已由 RUN_005 实跑确认 |
+| 多 seed scalar recovery | 未验证 |
+| 单次 continuous recovery | 已由 RUN_007 实跑确认 |
+| M1b 微小收益边界规则 | 已由 RUN_006 诊断、RUN_007 复验 |
+| 多 seed continuous recovery | 未验证 |
 | mixture recovery | 未验证 |
 | density recovery | 未验证 |
 | 完整 calibration | 未通过 |
@@ -1529,7 +1676,7 @@ mixture 校准失败或成功。
 本文档编写前完整测试结果：
 
 ```text
-38 passed
+43 passed
 ```
 
 测试覆盖：
@@ -1545,31 +1692,18 @@ mixture 校准失败或成功。
 - 最终模型 polish；
 - repetition checkpoint；
 - resume；
-- null 边界语义。
+- null 边界语义；
+- M1b 统计改善与实际改善双 gate；
+- 高 `style_l2` 的审慎 M1a 折叠；
+- RUN_005–007 pilot 配置。
 
 测试通过不等于科学结论通过，但能减少代码行为与预期不一致。
 
 ### 20.2 当前 Git 状态
 
-已提交 HEAD：
-
-```text
-7f64624 review for speed
-```
-
-当前工作区仍包含未提交修改，包括：
-
-- README；
-- CLI；
-- M2/M3；
-- pipeline；
-- recovery；
-- optimization tests；
-- repetition checkpoint tests；
-- pilot config；
-- pilot script；
-- RUN_002/003/004 的未跟踪 artifacts 和日志；
-- 本文档。
+本次归档以前一工程基线 `a01d265` 为起点。包含本文档的提交将归档
+RUN_005–007 的代码、配置、测试和小型 JSON 结果；日志、原始数据和
+凭据不进入 Git。
 
 在执行正式长运行前，应：
 
@@ -1586,16 +1720,20 @@ mixture 校准失败或成功。
 
 - requirements 使用宽版本范围，没有 lock file；
 - Windows WDDM 占用显存并带来波动；
-- 当前部分运行日志和 artifacts 未跟踪；
+- 运行日志仍不进入 Git，小型结构化 JSON artifacts 进入 Git；
 - RUN_001 缺少完整输入 hash 与环境归档；
-- RUN_004 已完整生成 summary、progress、checkpoint 和 model recovery 结果，但 artifacts 尚未提交归档；
+- RUN_004–007 的 summary、progress、checkpoint 和 model recovery
+  可用于审计，但每个机制仍只有一个 seed；
+- RUN_007 在代码提交前运行，因此其 provenance 记录的 Git commit
+  仍是 `a01d265`，实际工作树由 checkpoint 中的
+  `code_hash=fb586e13...` 区分；包含本规则的后续提交将成为新的代码基线；
 - 真实数据分析曾影响后续方法修订，因此下一次仍属于内部修订验证，不是全新的外部确认。
 
 ---
 
 ## 21. 推荐的下一步顺序
 
-### 阶段 A：完成当前 null 规则验证（已完成）
+### 阶段 A：完成 null、scalar 与 continuous 单次 pilot（已完成）
 
 RUN_004 已确认：
 
@@ -1607,8 +1745,8 @@ RUN_004 已确认：
 6. 耗时回落到 16 分 49 秒；
 7. config hash、code hash、summary、progress 和 checkpoint 均已生成。
 
-剩余的工程动作是把需要保留的 RUN_004 artifacts 与代码修改一起审查
-并归档，而不是重新解释这一 seed。
+RUN_005 又确认 scalar，RUN_006/007 完成 continuous 诊断与规则复验。
+这些结果应归档，但不能替代多 seed 校准。
 
 ### 阶段 B：低成本多 seed null
 
@@ -1621,17 +1759,16 @@ RUN_004 已确认：
 - 检查是否出现明显 false heterogeneity；
 - 检查高端边界规则是否稳定。
 
-### 阶段 C：分别跑 scalar、continuous、mixture pilot
+### 阶段 C：完成 mixture pilot
 
 不要一上来跑 4 × 100。
 
-先分别验证：
+scalar 和 continuous 单次 pilot 已完成。下一步只先验证 mixture：
 
-- scalar 是否建立 M1 且不错误选择 M2/M3；
-- continuous 是否恢复 rank=2；
 - mixture 是否恢复 3 类与足够 ARI；
-- 每种机制的实际耗时；
-- 哪种机制触发 stability refits。
+- 是否错误地选择 continuous；
+- 类别在稳定性重拟合中是否一致；
+- mixture 机制的实际耗时。
 
 ### 阶段 D：density pilot
 
@@ -1873,7 +2010,7 @@ null 的真实图片效用是 0。
 
 ## 25. 最终状态声明
 
-截至 2026-07-30：
+截至 2026-07-31：
 
 1. 数据已经成功获取、清洗、验证和划分；
 2. 首轮真实 CUDA 六维运行已经完成，但只属于 `RUN_001_DIAGNOSTIC`；
@@ -1884,8 +2021,11 @@ null 的真实图片效用是 0。
 7. null 高正则化边界的 recovery 语义已经在代码中修正；
 8. RUN_004 已确认 null recovery assessment 正常工作，且没有修改原始模型输出；
 9. RUN_004 工程状态和 null recovery 状态均成功，但它仍然只有一个 seed；
-10. scalar、continuous、mixture 与 density 的完整校准尚未完成；
-11. 因此完整 calibration 尚未通过，正式 Safety 修订验证尚未开始。
+10. RUN_005 已确认单次 scalar recovery；
+11. RUN_006 识别出 continuous，但暴露 M1b 微小收益边界问题；
+12. RUN_007 在保持预测证据几乎不变的情况下正确恢复 rank-2 continuous；
+13. mixture、多 seed 与 density 的完整校准尚未完成；
+14. 因此完整 calibration 尚未通过，正式 Safety 修订验证尚未开始。
 
 一句话总结：
 
@@ -1903,7 +2043,13 @@ null 的真实图片效用是 0。
 | `configs/confirmatory.yaml` | 核心确认性参数 |
 | `configs/calibration_cuda.yaml` | 完整 CUDA 校准配置 |
 | `configs/calibration_pilot_cuda.yaml` | 当前 null pilot 配置 |
+| `configs/calibration_scalar_pilot_cuda.yaml` | RUN_005 scalar pilot |
+| `configs/calibration_continuous_pilot_cuda.yaml` | RUN_006 continuous 诊断 |
+| `configs/calibration_continuous_rule_pilot_cuda.yaml` | RUN_007 continuous 规则复验 |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
+| `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
+| `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
+| `scripts/run_continuous_rule_pilot.ps1` | RUN_007 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint 与 null assessment |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -1914,3 +2060,6 @@ null 的真实图片效用是 0。
 | `artifacts/run_002_calibration_pilot/` | 首个 repetition 性能 pilot |
 | `artifacts/run_003_null_calibration_pilot/` | L2 边界诊断 |
 | `artifacts/run_004_null_rule_pilot/` | null 规则 pilot |
+| `artifacts/run_005_scalar_calibration_pilot/` | scalar 恢复 pilot |
+| `artifacts/run_006_continuous_calibration_pilot/` | continuous 边界诊断 |
+| `artifacts/run_007_continuous_rule_pilot/` | continuous 规则复验 |

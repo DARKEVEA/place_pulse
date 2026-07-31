@@ -434,8 +434,23 @@ def _select_scalar_baseline(
         if len(improvement) > 1
         else 0.0
     )
-    use_styles = float(improvement.mean()) > standard_error
+    mean_improvement = float(improvement.mean())
+    relative_improvement = mean_improvement / max(
+        float(a_scores.mean()), 1e-12
+    )
+    statistical_gate = mean_improvement > standard_error
+    practical_gate = (
+        relative_improvement
+        >= float(config["gates"]["min_cross_entropy_reduction"])
+    )
+    use_styles = statistical_gate and practical_gate
     values = [float(x) for x in candidates]
+    high_regularisation_collapse = (
+        len(values) > 1
+        and statistical_gate
+        and not practical_gate
+        and style_l2 == max(values)
+    )
     boundary_parameters = []
     if len(values) > 1:
         if utility_l2 in {min(values), max(values)}:
@@ -448,8 +463,12 @@ def _select_scalar_baseline(
         "utility_l2": utility_l2,
         "style_l2": style_l2,
         "response_styles": use_styles,
-        "m1b_improvement": float(improvement.mean()),
+        "m1b_improvement": mean_improvement,
         "m1b_improvement_se": standard_error,
+        "m1b_relative_improvement": relative_improvement,
+        "m1b_statistical_gate": statistical_gate,
+        "m1b_practical_gate": practical_gate,
+        "m1b_high_regularisation_collapse": high_regularisation_collapse,
         "selection_boundary": boundary,
         "selection_boundary_parameters": boundary_parameters,
     }

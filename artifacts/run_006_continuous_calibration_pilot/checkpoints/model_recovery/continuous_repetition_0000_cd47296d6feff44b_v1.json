@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "config_hash": "cd47296d6feff44b4f4a9e2800896f70291fa685e85c6714bbbf6e6e71e9c19f",
+  "code_hash": "5011425f5c3ca585629a3722dc445cc3ad7de9e39051e85899eb64fdc170d9c5",
+  "family": "model_recovery",
+  "mechanism": "continuous",
+  "repetition": 0,
+  "result": {
+    "mechanism": "continuous",
+    "verdict": "MODEL_CALIBRATION_FAILED",
+    "gates": {
+      "continuous_predictive_gate": true,
+      "continuous_edge_predictive_gate": true,
+      "baseline_predictive_gate": false,
+      "simulation_gate": true,
+      "selection_boundary_gate": false,
+      "baseline_reduction": 0.07178472271402742,
+      "mixture_predictive_gate": true,
+      "mixture_edge_predictive_gate": true,
+      "continuous_auxiliary_gate": true,
+      "mixture_auxiliary_gate": true,
+      "stable_class_gate": false,
+      "mixture_preferred_to_continuous": false,
+      "continuous_reduction": 0.1248103822871168,
+      "mixture_reduction": 0.06916214981022067
+    },
+    "baseline_selection": {
+      "name": "m1b",
+      "utility_l2": 1.0,
+      "style_l2": 100.0,
+      "response_styles": true,
+      "selection_boundary": true,
+      "selection_boundary_parameters": [
+        "style_l2"
+      ]
+    },
+    "selected_rank": 2,
+    "selected_continuous_l2": 1.0,
+    "selected_classes": 5,
+    "selected_mixture_l2": 1.0,
+    "stability_ari": 0.0,
+    "truth_ari": 0.0,
+    "repetition": 0,
+    "recovery_assessment": {
+      "recovered": false,
+      "reason": "target_verdict_not_recovered",
+      "target_verdict": "SCALAR_REJECTED_CONTINUOUS",
+      "raw_verdict": "MODEL_CALIBRATION_FAILED"
+    }
+  }
+}

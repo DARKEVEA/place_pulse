@@ -58,6 +58,86 @@ def test_scalar_selection_reports_boundary_parameters(monkeypatch):
     ]
 
 
+def test_scalar_selection_collapses_trivial_high_l2_styles(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+    config["gates"]["min_cross_entropy_reduction"] = 0.005
+    encoded = SimpleNamespace(choice=torch.tensor([0]))
+    monkeypatch.setattr(
+        pipeline,
+        "_encoded_inner_edge_splits",
+        lambda *args, **kwargs: [(encoded, encoded), (encoded, encoded)],
+    )
+    monkeypatch.setattr(pipeline, "_choice_array", lambda value: np.asarray([0]))
+    monkeypatch.setattr(
+        pipeline, "cross_entropy", lambda probabilities, choices: float(probabilities[0])
+    )
+
+    def fake_fit(*args, **kwargs):
+        utility_l2 = float(kwargs["utility_l2"])
+        base_score = 1.0 + abs(utility_l2 - 1.0) * 0.01
+        if kwargs["response_styles"]:
+            style_l2 = float(kwargs["style_l2"])
+            improvement = 0.001 if style_l2 == 10.0 else 0.0005
+            base_score -= improvement
+        return SimpleNamespace(
+            predict_proba=lambda value: np.asarray([base_score])
+        )
+
+    monkeypatch.setattr(pipeline.DavidsonModel, "fit", fake_fit)
+    selected = pipeline._select_scalar_baseline(
+        object(), config, torch.device("cpu")
+    )
+
+    assert selected["name"] == "m1a"
+    assert not selected["response_styles"]
+    assert selected["m1b_statistical_gate"]
+    assert not selected["m1b_practical_gate"]
+    assert selected["m1b_high_regularisation_collapse"]
+    assert not selected["selection_boundary"]
+    assert selected["selection_boundary_parameters"] == []
+
+
+def test_scalar_selection_keeps_material_high_l2_style_boundary(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+    config["gates"]["min_cross_entropy_reduction"] = 0.005
+    encoded = SimpleNamespace(choice=torch.tensor([0]))
+    monkeypatch.setattr(
+        pipeline,
+        "_encoded_inner_edge_splits",
+        lambda *args, **kwargs: [(encoded, encoded), (encoded, encoded)],
+    )
+    monkeypatch.setattr(pipeline, "_choice_array", lambda value: np.asarray([0]))
+    monkeypatch.setattr(
+        pipeline, "cross_entropy", lambda probabilities, choices: float(probabilities[0])
+    )
+
+    def fake_fit(*args, **kwargs):
+        utility_l2 = float(kwargs["utility_l2"])
+        base_score = 1.0 + abs(utility_l2 - 1.0) * 0.01
+        if kwargs["response_styles"]:
+            style_l2 = float(kwargs["style_l2"])
+            improvement = 0.01 if style_l2 == 10.0 else 0.005
+            base_score -= improvement
+        return SimpleNamespace(
+            predict_proba=lambda value: np.asarray([base_score])
+        )
+
+    monkeypatch.setattr(pipeline.DavidsonModel, "fit", fake_fit)
+    selected = pipeline._select_scalar_baseline(
+        object(), config, torch.device("cpu")
+    )
+
+    assert selected["name"] == "m1b"
+    assert selected["response_styles"]
+    assert selected["m1b_statistical_gate"]
+    assert selected["m1b_practical_gate"]
+    assert not selected["m1b_high_regularisation_collapse"]
+    assert selected["selection_boundary"]
+    assert selected["selection_boundary_parameters"] == ["style_l2"]
+
+
 def test_continuous_grid_uses_full_starts_only_for_shortlist(monkeypatch):
     config = load_config("configs/smoke.yaml")
     config["models"].update(

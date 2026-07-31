@@ -444,6 +444,26 @@ def _model_recovery_once(
             "utility_l2": float(baseline["utility_l2"]),
             "style_l2": float(baseline["style_l2"]),
             "response_styles": bool(baseline["response_styles"]),
+            "m1b_improvement": float(
+                baseline.get("m1b_improvement", 0.0)
+            ),
+            "m1b_improvement_se": float(
+                baseline.get("m1b_improvement_se", 0.0)
+            ),
+            "m1b_relative_improvement": float(
+                baseline.get("m1b_relative_improvement", 0.0)
+            ),
+            "m1b_statistical_gate": bool(
+                baseline.get("m1b_statistical_gate", False)
+            ),
+            "m1b_practical_gate": bool(
+                baseline.get("m1b_practical_gate", False)
+            ),
+            "m1b_high_regularisation_collapse": bool(
+                baseline.get(
+                    "m1b_high_regularisation_collapse", False
+                )
+            ),
             "selection_boundary": bool(
                 baseline.get("selection_boundary", False)
             ),
