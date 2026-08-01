@@ -15,7 +15,11 @@ from sklearn.metrics import adjusted_rand_score
 
 from placepulse_cusp.cusp.density import CuspDensity, MixtureExpertDensity
 from placepulse_cusp.data.splits import grouped_edge_folds
-from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import (
+    edge_predictive_gates,
+    heterogeneity_verdict,
+    selection_boundary_is_relevant,
+)
 from placepulse_cusp.evaluation.metrics import (
     clustered_elpd_bootstrap,
     empirical_probabilities,
@@ -552,6 +556,22 @@ def _model_recovery_once(
     redundant_class_weight = float(
         sum(weight for weight in class_weights if weight < minimum_class_weight)
     )
+    unbounded_edge_gates = edge_predictive_gates(
+        config,
+        float(-values["m0"].mean()),
+        float(-values["scalar"].mean()),
+        float(-values["continuous"].mean()),
+        float(-values["mixture"].mean()),
+        continuous_ci,
+        mixture_ci,
+        scalar_ci,
+        simulation_ok=True,
+        selection_boundary=False,
+    )
+    boundary_detected = bool(baseline.get("selection_boundary", False))
+    boundary_relevant = selection_boundary_is_relevant(
+        config, selections, unbounded_edge_gates
+    )
     edge_gates = edge_predictive_gates(
         config,
         float(-values["m0"].mean()),
@@ -562,7 +582,7 @@ def _model_recovery_once(
         mixture_ci,
         scalar_ci,
         simulation_ok=True,
-        selection_boundary=baseline.get("selection_boundary", False),
+        selection_boundary=boundary_relevant,
     )
     if edge_gates["baseline"] and edge_gates["mixture"]:
         bootstrap_stability, _ = _mixture_stability(
@@ -591,7 +611,7 @@ def _model_recovery_once(
         True,
         True,
         simulation_ok=True,
-        selection_boundary=baseline.get("selection_boundary", False),
+        selection_boundary=boundary_relevant,
     )
     return {
         "mechanism": mechanism,
@@ -622,9 +642,9 @@ def _model_recovery_once(
                     "m1b_high_regularisation_collapse", False
                 )
             ),
-            "selection_boundary": bool(
-                baseline.get("selection_boundary", False)
-            ),
+            "selection_boundary": boundary_relevant,
+            "selection_boundary_detected": boundary_detected,
+            "selection_boundary_relevant": boundary_relevant,
             "selection_boundary_parameters": list(
                 baseline.get("selection_boundary_parameters", [])
             ),

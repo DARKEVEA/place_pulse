@@ -181,6 +181,21 @@ def test_mixture_stratified_pilot_configuration():
     )
 
 
+def test_boundary_relevance_pilot_configuration():
+    config = load_config(
+        "configs/calibration_boundary_relevance_pilot_cuda.yaml"
+    )
+
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["simulation"]["model_mechanisms"] == ["null", "scalar"]
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_016_boundary_relevance_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_016_BOUNDARY_RELEVANCE_PILOT"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

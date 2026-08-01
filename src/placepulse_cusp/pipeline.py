@@ -22,7 +22,11 @@ from placepulse_cusp.cusp.compare import compare_density_models
 from placepulse_cusp.data.schema import standardise_votes
 from placepulse_cusp.data.splits import grouped_edge_folds, prepare_data
 from placepulse_cusp.data.validate import validate_votes
-from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import (
+    edge_predictive_gates,
+    heterogeneity_verdict,
+    selection_boundary_is_relevant,
+)
 from placepulse_cusp.evaluation.metrics import (
     bootstrap_reversal_evidence,
     clustered_elpd_bootstrap,
@@ -1036,19 +1040,23 @@ def run_dimension(
     matching_baselines = [
         item["baseline"] for item in selections if item["baseline"]["name"] == baseline_name
     ]
+    boundary_parameters = {
+        parameter
+        for item in matching_baselines
+        for parameter in item.get("selection_boundary_parameters", [])
+    }
+    if any(item.get("continuous_selection_boundary", False) for item in selections):
+        boundary_parameters.add("continuous_l2")
+    if any(item.get("mixture_selection_boundary", False) for item in selections):
+        boundary_parameters.add("mixture_l2")
+    boundary_detected = bool(boundary_parameters)
     baseline = {
         "name": baseline_name,
         "utility_l2": mode(item["utility_l2"] for item in matching_baselines),
         "style_l2": mode(item["style_l2"] for item in matching_baselines),
         "response_styles": baseline_name == "m1b",
-        "selection_boundary": any(
-            item.get("selection_boundary", False) for item in matching_baselines
-        )
-        or any(
-            item.get("continuous_selection_boundary", False)
-            or item.get("mixture_selection_boundary", False)
-            for item in selections
-        ),
+        "selection_boundary_detected": boundary_detected,
+        "selection_boundary_parameters": sorted(boundary_parameters),
     }
     selected_l2 = mode(
         item["continuous_l2"]
@@ -1090,6 +1098,23 @@ def run_dimension(
         repetitions=config["gates"]["elpd_bootstrap"],
         seed=config["project"]["seed"] + 2,
     )
+    unbounded_edge_gates = edge_predictive_gates(
+        config,
+        m0_ce,
+        scalar_ce,
+        continuous_ce,
+        mixture_ce,
+        continuous_ci,
+        mixture_ci,
+        scalar_vs_m0_ci,
+        simulation_ok=config.get("_simulation_ok", True),
+        selection_boundary=False,
+    )
+    boundary_relevant = selection_boundary_is_relevant(
+        config, selections, unbounded_edge_gates
+    )
+    baseline["selection_boundary"] = boundary_relevant
+    baseline["selection_boundary_relevant"] = boundary_relevant
     edge_gates = edge_predictive_gates(
         config,
         m0_ce,

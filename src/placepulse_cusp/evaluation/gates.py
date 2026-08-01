@@ -3,6 +3,65 @@ from __future__ import annotations
 from typing import Any
 
 
+def selection_boundary_is_relevant(
+    config: dict[str, Any],
+    selections: list[dict[str, Any]],
+    edge_gates: dict[str, Any],
+) -> bool:
+    """Return whether a search boundary can still change the verdict.
+
+    A lower-L2 boundary is always relevant because additional flexibility may
+    improve the candidate outside the grid. An upper-L2 boundary is relevant
+    only when that model family already has predictive evidence; otherwise it
+    represents safe shrinkage of an unsupported model toward its simpler
+    neighbour.
+    """
+    candidates = [float(value) for value in config["models"]["l2_candidates"]]
+    if len(set(candidates)) <= 1:
+        return any(
+            item.get("baseline", {}).get("selection_boundary", False)
+            or item.get("continuous_selection_boundary", False)
+            or item.get("mixture_selection_boundary", False)
+            for item in selections
+        )
+    lower = min(candidates)
+    upper = max(candidates)
+    gate_by_parameter = {
+        "utility_l2": "baseline_edge",
+        "style_l2": "baseline_edge",
+        "continuous_l2": "continuous",
+        "mixture_l2": "mixture",
+    }
+
+    def relevant(parameter: str, value: Any) -> bool:
+        if parameter not in gate_by_parameter:
+            return True
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return True
+        if numeric == lower:
+            return True
+        if numeric != upper:
+            return True
+        return bool(edge_gates.get(gate_by_parameter[parameter], True))
+
+    for item in selections:
+        baseline = item.get("baseline", {})
+        for parameter in baseline.get("selection_boundary_parameters", []):
+            if relevant(parameter, baseline.get(parameter)):
+                return True
+        if item.get("continuous_selection_boundary", False) and relevant(
+            "continuous_l2", item.get("continuous_l2")
+        ):
+            return True
+        if item.get("mixture_selection_boundary", False) and relevant(
+            "mixture_l2", item.get("mixture_l2")
+        ):
+            return True
+    return False
+
+
 def edge_predictive_gates(
     config: dict[str, Any],
     m0_ce: float,

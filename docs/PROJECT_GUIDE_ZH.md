@@ -1827,6 +1827,23 @@ refinement 都覆盖 K2/K3/K4/K5；各折选择为 K4、K3、K3，跨折众数�
 比较后，在两折明确胜过 K4/K5，并通过跨折众数严格恢复。它仍只是一个
 seed，不能替代完整恢复率估计。
 
+### 17.17 边界相关性规则
+
+RUN_010 还显示：null/scalar 中没有预测收益的 M2/M3 常选择最高 L2。这是
+复杂模型向简单模型收缩，但旧生产 gate 把任何候选的任意边界都当作全局
+失败。完整严格校准前将边界规则改为：
+
+- 最低 L2 边界始终相关，因为网格外更灵活的模型可能改变结论；
+- 最高 L2 边界在对应模型已经有预测证据时仍相关；
+- 最高 L2 边界在对应模型没有预测证据时属于安全收缩，不阻断 verdict；
+- 未知边界和无法解释的参数继续保守阻断；
+- 同时保存 `selection_boundary_detected` 与
+  `selection_boundary_relevant`，不隐藏边界事实。
+
+该规则不会降低预测改善、置信区间、ARI、稳定性或 reversal 门槛。它只是
+防止一个明确未获支持的复杂候选阻断 null/scalar 的正确结论。RUN_016 将
+专门用 null 与 scalar 实跑验证，再冻结完整 model recovery。
+
 ---
 
 ## 18. 性能分析
@@ -2463,6 +2480,7 @@ null 的真实图片效用是 0。
 | `configs/calibration_density_diagnostics_cuda.yaml` | RUN_013 负对照诊断字段验证 |
 | `configs/calibration_density_confirmatory_cuda.yaml` | RUN_014 100 次 density 校准 |
 | `configs/calibration_mixture_stratified_pilot_cuda.yaml` | RUN_015 结构分层 mixture pilot |
+| `configs/calibration_boundary_relevance_pilot_cuda.yaml` | RUN_016 null/scalar 边界相关性 pilot |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
@@ -2475,6 +2493,7 @@ null 的真实图片效用是 0。
 | `scripts/run_density_diagnostics.ps1` | RUN_013 density 诊断启动脚本 |
 | `scripts/run_density_confirmatory.ps1` | RUN_014 100 次 density 启动脚本 |
 | `scripts/run_mixture_stratified_pilot.ps1` | RUN_015 结构分层 mixture 启动脚本 |
+| `scripts/run_boundary_relevance_pilot.ps1` | RUN_016 null/scalar 边界 pilot |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint、严格/有效 assessment 与离线重评估 |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |

@@ -1,5 +1,9 @@
 from placepulse_cusp.config import load_config
-from placepulse_cusp.evaluation.gates import edge_predictive_gates, heterogeneity_verdict
+from placepulse_cusp.evaluation.gates import (
+    edge_predictive_gates,
+    heterogeneity_verdict,
+    selection_boundary_is_relevant,
+)
 
 
 def _verdict(*, m0=1.0, scalar=0.9, simulation=True, boundary=False):
@@ -58,3 +62,57 @@ def test_baseline_edge_gate_survives_unrelated_search_boundary():
     assert verdict == "MODEL_CALIBRATION_FAILED"
     assert not gates["baseline_predictive_gate"]
     assert gates["baseline_edge_predictive_gate"]
+
+
+def _boundary_selection(value):
+    return {
+        "baseline": {
+            "utility_l2": value,
+            "style_l2": value,
+            "selection_boundary": True,
+            "selection_boundary_parameters": ["utility_l2"],
+        },
+        "continuous_l2": value,
+        "continuous_selection_boundary": True,
+        "mixture_l2": value,
+        "mixture_selection_boundary": True,
+    }
+
+
+def test_unsupported_upper_boundaries_are_safe_shrinkage():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+
+    relevant = selection_boundary_is_relevant(
+        config,
+        [_boundary_selection(10.0)],
+        {"baseline_edge": False, "continuous": False, "mixture": False},
+    )
+
+    assert not relevant
+
+
+def test_supported_upper_boundary_remains_relevant():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+
+    relevant = selection_boundary_is_relevant(
+        config,
+        [_boundary_selection(10.0)],
+        {"baseline_edge": False, "continuous": True, "mixture": False},
+    )
+
+    assert relevant
+
+
+def test_lower_boundary_is_always_relevant():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]
+
+    relevant = selection_boundary_is_relevant(
+        config,
+        [_boundary_selection(0.1)],
+        {"baseline_edge": False, "continuous": False, "mixture": False},
+    )
+
+    assert relevant
