@@ -285,10 +285,73 @@ def test_mixture_selection_can_return_candidate_diagnostics(monkeypatch):
     assert diagnostics["selected_l2"] == 0.1
     assert len(diagnostics["screening"]) == 4
     assert len(diagnostics["refinement"]) == 2
+    assert diagnostics["shortlist_strategy"] == (
+        "best_per_class_then_global"
+    )
+    assert diagnostics["refined_classes"] == [2, 3]
     assert all(
         len(item["fold_cross_entropy"]) == 2
         for item in diagnostics["refinement"]
     )
+
+
+def test_mixture_shortlist_preserves_every_class_count(monkeypatch):
+    config = load_config("configs/smoke.yaml")
+    config["models"].update(
+        {
+            "mixture_classes": [2, 3, 4],
+            "l2_candidates": [0.1, 1.0],
+            "random_starts": 2,
+        }
+    )
+    encoded = SimpleNamespace(choice=torch.tensor([0]))
+    monkeypatch.setattr(
+        pipeline,
+        "_encoded_inner_edge_splits",
+        lambda *args, **kwargs: [(encoded, encoded)],
+    )
+    monkeypatch.setattr(pipeline, "_choice_array", lambda value: np.asarray([0]))
+    monkeypatch.setattr(
+        pipeline, "cross_entropy", lambda probabilities, choices: float(probabilities[0])
+    )
+    calls = []
+
+    def fake_fit(
+        encoded_train,
+        config,
+        baseline,
+        classes,
+        l2,
+        seed,
+        *,
+        selection=True,
+        starts=None,
+        screening=False,
+    ):
+        calls.append((classes, l2, starts, screening))
+        class_score = (
+            {2: 5.0, 3: 4.0, 4: 1.0}[classes]
+            if screening
+            else {2: 2.0, 3: 0.5, 4: 1.0}[classes]
+        )
+        return SimpleNamespace(
+            predict_proba=lambda value: np.asarray([class_score + l2])
+        )
+
+    monkeypatch.setattr(pipeline, "_best_mixture_fit", fake_fit)
+    classes, l2, diagnostics = pipeline._select_mixture(
+        object(),
+        config,
+        torch.device("cpu"),
+        {"utility_l2": 0.1},
+        return_diagnostics=True,
+    )
+
+    refinement = [call for call in calls if call[2] == 2]
+    assert {call[0] for call in refinement} == {2, 3, 4}
+    assert diagnostics["refinement_budget"] == 3
+    assert diagnostics["refined_classes"] == [2, 3, 4]
+    assert (classes, l2) == (3, 0.1)
     assert all(
         item["standard_error"] == 0.0
         for item in diagnostics["refinement"]

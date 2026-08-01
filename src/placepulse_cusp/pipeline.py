@@ -654,6 +654,44 @@ def _best_mixture_fit(
     return best
 
 
+def _stratified_mixture_shortlist(
+    screening_results: dict[tuple[int, float], dict[str, Any]],
+    budget: int,
+) -> list[tuple[int, float]]:
+    """Keep the best screened L2 for every K before filling globally.
+
+    Low-fidelity scores are useful for allocating compute within a model
+    structure, but they must not eliminate an entire candidate class count
+    before any full-fidelity comparison is made.
+    """
+    ranking = sorted(
+        screening_results,
+        key=lambda candidate: (
+            screening_results[candidate]["mean_cross_entropy"],
+            candidate[0],
+            candidate[1],
+        ),
+    )
+    classes = sorted({candidate[0] for candidate in ranking})
+    effective_budget = max(int(budget), len(classes))
+    shortlist = [
+        min(
+            (candidate for candidate in ranking if candidate[0] == classes_count),
+            key=lambda candidate: (
+                screening_results[candidate]["mean_cross_entropy"],
+                candidate[1],
+            ),
+        )
+        for classes_count in classes
+    ]
+    for candidate in ranking:
+        if candidate not in shortlist:
+            shortlist.append(candidate)
+        if len(shortlist) >= effective_budget:
+            break
+    return shortlist
+
+
 def _select_mixture(
     train: pl.DataFrame,
     config: dict[str, Any],
@@ -721,12 +759,9 @@ def _select_mixture(
             candidate: evaluate(candidate, 1, screening=True)
             for candidate in candidates
         }
-        shortlist = sorted(
-            screening_results,
-            key=lambda candidate: screening_results[candidate][
-                "mean_cross_entropy"
-            ],
-        )[:starts]
+        shortlist = _stratified_mixture_shortlist(
+            screening_results, starts
+        )
         refinement_results = {
             candidate: evaluate(candidate, starts) for candidate in shortlist
         }
@@ -747,6 +782,11 @@ def _select_mixture(
             "selected_l2": float(selected[1]),
             "screening": list(screening_results.values()),
             "refinement": list(refinement_results.values()),
+            "shortlist_strategy": "best_per_class_then_global",
+            "refinement_budget": len(refinement_results),
+            "refined_classes": sorted(
+                {candidate[0] for candidate in refinement_results}
+            ),
         }
     return selected
 

@@ -165,6 +165,22 @@ def test_density_confirmatory_configuration():
     )
 
 
+def test_mixture_stratified_pilot_configuration():
+    config = load_config(
+        "configs/calibration_mixture_stratified_pilot_cuda.yaml"
+    )
+
+    assert config["simulation"]["model_repetitions"] == 1
+    assert config["simulation"]["model_mechanisms"] == ["mixture"]
+    assert config["models"]["mixture_classes"] == [2, 3, 4, 5]
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_015_mixture_stratified_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_015_MIXTURE_STRATIFIED_PILOT"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

@@ -123,21 +123,22 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 - RUN_007 对“统计显著但实际收益可忽略”规则的复验；
 - RUN_008 对 mixture 判决、类别稳定性与精确类别数恢复的诊断；
 - RUN_009 对跨折众数、空余类别和候选筛选路径的诊断；
-- RUN_010 对四种机制各 5 seeds 的修订性工程筛查。
+- RUN_010 对四种机制各 5 seeds 的修订性工程筛查；
+- RUN_011–RUN_013 对 density 流程、跨 seed 行为和负对照诊断的验证；
+- RUN_014 对 density/CUSP 的 100 次确认性恢复校准。
 
 但还没有完成：
 
-- 多随机种子的 null 假阳性率验证；
-- scalar、continuous、mixture 三种机制的完整恢复率验证；
-- 完整 density recovery；
+- 结构分层 mixture shortlist 的实际验证；
+- null、scalar、continuous、mixture 各 100 次的完整严格 model recovery；
 - 冻结后的 Safety 修订验证；
 - 可作为正式科学证据的新确认性数据分析。
 
 因此，当前最准确的总状态是：
 
-> **工程流水线已经能运行，null、scalar 和 continuous 的单次 pilot
-> 符合预期；mixture 判决与分群高度一致，但精确类别数和跨折聚合仍
-> 需修正验证。多 seed 与 density 尚未完成，正式科学判断仍应暂缓。**
+> **工程流水线、四机制 5-seed 筛查和 100 次 density/CUSP 校准已经完成；
+> density 阶段严格通过。model recovery 的有效标准已通过 5-seed 筛查，
+> 但 mixture 精确类别数与完整 100 次严格恢复仍待解决，正式科学判断仍应暂缓。**
 
 ---
 
@@ -1953,10 +1954,10 @@ mixture 校准失败或成功。
 | null 高正则化边界语义 | 已在代码中修正，并由 RUN_004 实跑确认 |
 | 多 seed null 假阳性率 | 未验证 |
 | 单次 scalar recovery | 已由 RUN_005 实跑确认 |
-| 多 seed scalar recovery | 未验证 |
+| 多 seed scalar recovery | RUN_010：实际行为 5/5，有效 5/5，旧严格 assessment 1/5 |
 | 单次 continuous recovery | 已由 RUN_007 实跑确认 |
 | M1b 微小收益边界规则 | 已由 RUN_006 诊断、RUN_007 复验 |
-| 多 seed continuous recovery | 未验证 |
+| 多 seed continuous recovery | RUN_010 严格 5/5 |
 | 单次 mixture verdict | RUN_008 正确选择 mixture |
 | 单次 mixture truth ARI | median 0.990、聚合拟合 0.997 |
 | 单次 mixture stability ARI | 0.999，明显超过 0.70 |
@@ -1967,8 +1968,8 @@ mixture 校准失败或成功。
 | 5-seed scalar 实际行为 | 5/5 建立标量、0/5 假异质性；assessment 待扩展 |
 | 5-seed continuous recovery | 严格 5/5 |
 | 5-seed mixture recovery | 严格 0/5、有效结构 5/5 |
-| density recovery | 未验证 |
-| 完整 calibration | 未通过 |
+| density recovery | RUN_014 确认性通过：100/100 recovery、0/100 假阳性 |
+| 完整 calibration | density 已通过；严格完整 model recovery 尚未完成 |
 | 正式 Safety 修订验证 | 尚未开始 |
 | 六维确认性复制 | 尚未开始 |
 
@@ -2399,8 +2400,8 @@ null 的真实图片效用是 0。
 19. RUN_010 离线重评估已完成，原始严格 `status=failed` 保持不变，四机制
     有效恢复率均为 5/5，`effective_status=ok`；
 20. 历史 scalar 结果缺少独立 baseline CI gate，重评估对此妥协已明确归档；
-21. density 与完整确认性校准尚未完成；
-22. 因此正式 Safety 修订验证尚未开始。
+21. density/CUSP 确认性校准已由 RUN_014 完成并通过；
+22. 完整严格 model recovery 尚未完成，因此正式 Safety 修订验证尚未开始。
 23. RUN_011 单次 density pilot 已通过：CUSP recovery 1/1、mixture 假阳性
     0/1、耗时 13.327 秒；下一步需要多 seed density screening。
 24. RUN_012 density screening 已通过：CUSP recovery 5/5、mixture 假阳性
