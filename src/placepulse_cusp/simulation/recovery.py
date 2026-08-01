@@ -182,6 +182,11 @@ def validate_density_recovery(
         rng = np.random.default_rng(
             config["project"]["seed"] + 200000 + repetition
         )
+        print(
+            f"[simulation] density: repetition {repetition + 1}/{repetitions}",
+            file=sys.stderr,
+            flush=True,
+        )
         x, y, weight = _cusp_sample(n, rng)
         split = int(n * 0.8)
         cusp = CuspDensity(
@@ -200,14 +205,22 @@ def validate_density_recovery(
             max_iterations=config["cusp"]["max_iterations"],
         ).fit(x[:split], mixture_y[:split])
         moe_m = MixtureExpertDensity().fit(x[:split], mixture_y[:split])
-        false_win = cusp_m.logpdf(x[split:], mixture_y[split:]).mean() > moe_m.logpdf(
-            x[split:], mixture_y[split:]
-        ).mean()
+        mixture_cusp_score = float(
+            cusp_m.logpdf(x[split:], mixture_y[split:]).mean()
+        )
+        mixture_reference_score = float(
+            moe_m.logpdf(x[split:], mixture_y[split:]).mean()
+        )
+        mixture_cusp_margin = mixture_cusp_score - mixture_reference_score
+        false_win = mixture_cusp_margin > 0
         item = {
             "repetition": repetition,
             "cusp_score": cusp_score,
             "mixture_score": mixture_score,
             "cusp_win": bool(cusp_score > mixture_score),
+            "mixture_cusp_score": mixture_cusp_score,
+            "mixture_reference_score": mixture_reference_score,
+            "mixture_cusp_margin": mixture_cusp_margin,
             "mixture_false_cusp_win": bool(false_win),
         }
         _save_repetition_checkpoint(

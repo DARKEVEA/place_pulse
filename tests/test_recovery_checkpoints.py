@@ -139,6 +139,18 @@ def test_density_multiseed_configuration():
     )
 
 
+def test_density_diagnostics_configuration():
+    config = load_config("configs/calibration_density_diagnostics_cuda.yaml")
+
+    assert config["simulation"]["repetitions"] == 1
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_013_density_diagnostics"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_013_DENSITY_DIAGNOSTICS"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {
@@ -236,6 +248,12 @@ def test_density_recovery_resumes_completed_repetitions(tmp_path, monkeypatch):
     monkeypatch.setattr(recovery, "MixtureExpertDensity", FakeDensity)
     first = recovery.validate_density_recovery(config)
     assert len(sample_calls) == 2
+    assert all(
+        item["mixture_cusp_score"] == 0.0
+        and item["mixture_reference_score"] == 0.0
+        and item["mixture_cusp_margin"] == 0.0
+        for item in first["details"]
+    )
 
     monkeypatch.setattr(
         recovery,
