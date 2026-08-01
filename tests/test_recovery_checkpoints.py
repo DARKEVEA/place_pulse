@@ -113,6 +113,20 @@ def test_multiseed_model_screening_configuration():
     )
 
 
+def test_density_pilot_configuration():
+    config = load_config("configs/calibration_density_pilot_cuda.yaml")
+
+    assert config["simulation"]["repetitions"] == 1
+    assert config["cusp"]["quadrature_points"] == 160
+    assert config["cusp"]["max_iterations"] == 1000
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_011_density_calibration_pilot"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_011_DENSITY_CALIBRATION_PILOT"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

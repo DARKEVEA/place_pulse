@@ -1,0 +1,8 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  repetitions: 1
+
+reporting:
+  artifacts_dir: artifacts/run_011_density_calibration_pilot
+  run_label: RUN_011_DENSITY_CALIBRATION_PILOT

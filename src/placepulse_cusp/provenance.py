@@ -20,9 +20,20 @@ def sha256_file(path: str | Path) -> str:
 
 
 def git_commit() -> str | None:
+    repository = Path(__file__).resolve().parents[2]
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+            [
+                "git",
+                "-c",
+                f"safe.directory={repository.as_posix()}",
+                "-C",
+                str(repository),
+                "rev-parse",
+                "HEAD",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
         ).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
