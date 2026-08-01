@@ -1756,6 +1756,22 @@ screening 门槛，而且正例优势并非只由一个 seed 驱动。
 模型的具体 score 和 margin。正式 100 次运行前，最好先补充这些诊断字段；
 这不会改变 gate，只会提高失败时的可解释性。
 
+### 17.14 RUN_013 density diagnostics
+
+RUN_013 在冻结提交 `b507057` 上验证新增的 mixture 负对照诊断字段。单次
+运行耗时 14.190 秒，结果为：
+
+- CUSP 正例 margin：`+0.091665`；
+- mixture 负对照中的 CUSP score：`-1.817283`；
+- mixture reference score：`-1.368540`；
+- mixture 负对照 CUSP margin：`-0.448743`；
+- CUSP recovery 1/1，mixture 假阳性 0/1；
+- checkpoint、进度输出和 provenance 正常。
+
+负 margin 表示 CUSP 在非 CUSP mixture 数据上明显输给 reference 模型，
+方向与负对照预期一致。该改动只增加诊断字段，没有修改胜负判定、恢复率
+门槛或数据生成过程，因此可以冻结并进入 RUN_014 的 100 次 density 校准。
+
 ---
 
 ## 18. 性能分析
@@ -2093,9 +2109,9 @@ RUN_010 离线 assessment 已完成：原始 strict status 保持失败，有效
 - SciPy CPU 阶段的真实耗时；
 - density checkpoint。
 
-RUN_011 单次 pilot 与 RUN_012 五 seed screening 均已通过。RUN_012 为
-CUSP recovery 5/5、mixture 假阳性 0/5，但仍不把 5 次 screening 当作
-最终确认性比率估计。正式 100 次运行前先补齐 mixture 负对照 score margin。
+RUN_011 单次 pilot、RUN_012 五 seed screening 和 RUN_013 负对照字段验证
+均已通过。RUN_013 没有修改 gate，下一步运行冻结的 RUN_014 100 次 density
+校准，以估计 recovery 与 mixture 假阳性率。
 
 ### 阶段 F：冻结完整 calibration
 
@@ -2358,6 +2374,8 @@ null 的真实图片效用是 0。
     0/1、耗时 13.327 秒；下一步需要多 seed density screening。
 24. RUN_012 density screening 已通过：CUSP recovery 5/5、mixture 假阳性
     0/5、耗时 43.592 秒；它支持扩大验证，但不替代 100 次确认性实验。
+25. RUN_013 已补齐并验证 mixture 负对照 score/margin；负 margin 为
+    -0.448743，方向正确，已具备运行 RUN_014 的条件。
 
 一句话总结：
 
@@ -2383,6 +2401,8 @@ null 的真实图片效用是 0。
 | `configs/calibration_multiseed_screening_cuda.yaml` | RUN_010 四机制 × 5 seeds screening |
 | `configs/calibration_density_pilot_cuda.yaml` | RUN_011 单次 density recovery pilot |
 | `configs/calibration_density_multiseed_cuda.yaml` | RUN_012 五 seed density screening |
+| `configs/calibration_density_diagnostics_cuda.yaml` | RUN_013 负对照诊断字段验证 |
+| `configs/calibration_density_confirmatory_cuda.yaml` | RUN_014 100 次 density 校准 |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
@@ -2392,6 +2412,8 @@ null 的真实图片效用是 0。
 | `scripts/run_multiseed_model_screening.ps1` | RUN_010 启动脚本 |
 | `scripts/run_density_calibration_pilot.ps1` | RUN_011 CPU density pilot 启动脚本 |
 | `scripts/run_density_multiseed_screening.ps1` | RUN_012 五 seed density 启动脚本 |
+| `scripts/run_density_diagnostics.ps1` | RUN_013 density 诊断启动脚本 |
+| `scripts/run_density_confirmatory.ps1` | RUN_014 100 次 density 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint、严格/有效 assessment 与离线重评估 |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -2410,3 +2432,4 @@ null 的真实图片效用是 0。
 | `artifacts/run_010_multiseed_model_screening/` | 四机制 5-seed screening |
 | `artifacts/run_011_density_calibration_pilot/` | 单次 CUSP/density recovery pilot |
 | `artifacts/run_012_density_multiseed_screening/` | 五 seed CUSP/density screening |
+| `artifacts/run_013_density_diagnostics/` | mixture 负对照 score/margin 验证 |

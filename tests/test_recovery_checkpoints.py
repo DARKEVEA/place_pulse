@@ -151,6 +151,20 @@ def test_density_diagnostics_configuration():
     )
 
 
+def test_density_confirmatory_configuration():
+    config = load_config("configs/calibration_density_confirmatory_cuda.yaml")
+
+    assert config["simulation"]["repetitions"] == 100
+    assert config["simulation"]["recovery_min_rate"] == 0.80
+    assert config["simulation"]["cusp_max_mixture_false_positive"] == 0.10
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_014_density_confirmatory"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_014_DENSITY_CONFIRMATORY"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

@@ -1,0 +1,8 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  repetitions: 100
+
+reporting:
+  artifacts_dir: artifacts/run_014_density_confirmatory
+  run_label: RUN_014_DENSITY_CONFIRMATORY
