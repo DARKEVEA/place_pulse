@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "cusp_recovery_rate": 1.0,
+  "mixture_false_cusp_rate": 0.0,
+  "repetitions": 1,
+  "details": [
+    {
+      "repetition": 0,
+      "cusp_score": -0.6188307207120044,
+      "mixture_score": -0.7104957740021905,
+      "cusp_win": true,
+      "mixture_false_cusp_win": false
+    }
+  ],
+  "provenance": {
+    "created_at": "2026-08-01T04:28:46.922789+00:00",
+    "config_hash": "49dfb9220523d70954f51fb4dc7688ee7c9e390f715b0a91975118e9fcfcf8c8",
+    "git_commit": "73017f52005861ca7e444986b7aa6b76a574a772",
+    "seed": 1103,
+    "inputs": {},
+    "run_label": "RUN_011_DENSITY_CALIBRATION_PILOT"
+  }
+}
