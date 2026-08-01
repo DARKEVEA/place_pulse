@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-08-01T00:12:20.7725247+08:00",
+    "finished_at":  "2026-08-01T04:58:16.2075508+08:00",
+    "elapsed_seconds":  17155.435,
+    "elapsed_minutes":  285.924,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_multiseed_screening_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_010_multiseed_model_screening",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_010_multiseed_model_screening.log"
+}

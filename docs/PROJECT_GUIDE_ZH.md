@@ -13,7 +13,7 @@
 | 当前代码分支 | `main` |
 | 本次归档前基线 | `a01d265`（`calibration: add resumable recovery and null pilot validation`） |
 | 当前已提交基线 | `273c070`（RUN_005–007 规则、测试与结果归档） |
-| 当前工作范围 | RUN_009 结果归档、严格/有效双标准与多 seed screening |
+| 当前工作范围 | RUN_010 多 seed 结果归档与 assessment 语义修订 |
 | 当前科学状态 | 校准尚未全部通过；不能把首轮真实数据输出当作最终确认性结论 |
 
 ## 推荐阅读路线
@@ -27,7 +27,7 @@
 1. 第 1 节“一页摘要”；
 2. 第 2 节“生活化例子”；
 3. 第 9 节“统计闸门”；
-4. 第 17 节“RUN_002 至 RUN_009”；
+4. 第 17 节“RUN_002 至 RUN_010”；
 5. 第 19 节“当前校准结论”；
 6. 第 25 节“最终状态声明”。
 
@@ -122,7 +122,8 @@ Place Pulse 是一个城市感知数据集。参与者会看到两张街景图�
 - RUN_006 对 continuous 机制中 M1b 风格边界问题的诊断；
 - RUN_007 对“统计显著但实际收益可忽略”规则的复验；
 - RUN_008 对 mixture 判决、类别稳定性与精确类别数恢复的诊断；
-- RUN_009 对跨折众数、空余类别和候选筛选路径的诊断。
+- RUN_009 对跨折众数、空余类别和候选筛选路径的诊断；
+- RUN_010 对四种机制各 5 seeds 的修订性工程筛查。
 
 但还没有完成：
 
@@ -1195,7 +1196,7 @@ SCIENTIFIC_VERDICT_DEFERRED
 
 ---
 
-## 17. RUN_002 至 RUN_009 的目标和结果
+## 17. RUN_002 至 RUN_010 的目标和结果
 
 这些运行不是在真实数据上“调出想要的结果”，而是在已知生成真相的
 合成数据上依次检查 null、scalar 和 continuous 机制，并诊断校准规则
@@ -1282,7 +1283,7 @@ mixture reduction    = -7.996e-6
 - 扩大上限后仍选择新上限，说明 null 数据自然倾向无限强收缩；
 - 继续盲目扩到 10000 没有意义。
 
-### 17.3 RUN_002 至 RUN_009 的性能对比
+### 17.3 RUN_002 至 RUN_010 的性能对比
 
 | Run | L2 候选数 | 耗时 | 相对 RUN_002 |
 |---|---:|---:|---:|
@@ -1294,6 +1295,7 @@ mixture reduction    = -7.996e-6
 | RUN_007 continuous-rule | 6 | 27 分 33 秒 | 慢约 29.1% |
 | RUN_008 mixture | 6 | 14 分 58 秒 | 快约 29.9% |
 | RUN_009 mixture-aggregation | 6 | 16 分 1 秒 | 快约 25.0% |
+| RUN_010 20 repetitions | 6 | 4 小时 45 分 55 秒 | 平均 14.3 分/次 |
 
 RUN_002 与 RUN_003 的候选数和耗时几乎线性增长，证明候选模型拟合
 是主要成本来源。RUN_004 恢复六点网格后，比 RUN_002 还快约 4 分
@@ -1628,6 +1630,40 @@ refinement 都只包含 K4/K5，真实 K3 在低保真 screening 后被淘汰。
 分层 shortlist 仍应在最终确认性冻结前解决。用户选择先进行多 seed
 screening，所以该筛查必须标为修订性/工程筛查，而不是严格门槛已经通过。
 
+### 17.10 RUN_010 multiseed model screening
+
+RUN_010 对 null、scalar、continuous、mixture 各运行 5 个 seeds，共
+20 repetitions。运行正常完成，耗时 17155.435 秒，即 4 小时 45 分
+55 秒，20 个 checkpoints 全部保存。
+
+机器汇总为：
+
+| 机制 | 严格恢复率 | 当前有效恢复率 | 实际模型行为 |
+|---|---:|---:|---|
+| null | 0/5 | 0/5 | 无假信号，但 M1/M2/M3 高收缩边界未被 assessment 接纳 |
+| scalar | 1/5 | 1/5 | 5/5 有强标量信号、0/5 假异质性；复杂模型高收缩边界导致 4 次技术失败 |
+| continuous | 5/5 | 5/5 | 5/5 verdict 正确且三折均恢复 rank 2 |
+| mixture | 0/5 | 5/5 | 5/5 verdict 正确且均为 3 个有效类别 |
+
+null 的预测改善都接近零，continuous/mixture 没有假阳性。scalar 的
+baseline 改善为 `11.04%–12.18%`，复杂模型额外改善远低于 `0.5%`，
+`scalar_false_rejection_rate=0`。因此 null/scalar 的低机器恢复率来自
+未获胜复杂模型选择最高正则化，而不是模型做出错误科学判断。
+
+continuous 的改善为 `12.26%–13.37%`，5 个 seeds、每个 seed 的三个
+outer folds 都选择 rank 2。mixture 的最低 median fold truth ARI 为
+0.978，最低 stability ARI 为 0.987；名义类别数为 4 或 5，但五次有效
+类别数都是 3，多余类别总权重最高只有 0.599%。
+
+所以 RUN_010 支持两个同时成立的结论：
+
+1. 四种机制的实际模型家族行为在 5 seeds 上均符合生成真相；
+2. 严格 calibration 仍未通过，当前 `effective_status` 也因 null/scalar
+   assessment 尚未覆盖 M2/M3 的预期高收缩边界而失败。
+
+下一步只修订 recovery assessment，不覆盖 raw verdict，也不重新训练。
+原始 RUN_010 JSON 必须保留，新的重评结果写入独立文件。
+
 ---
 
 ## 18. 性能分析
@@ -1788,7 +1824,10 @@ mixture 校准失败或成功。
 | mixture 精确类别数 | 严格未通过：三折均选择 4，目标为 3 |
 | mixture 有效类别数 | 3；第四类权重 0.15%，按 10% 门槛为近空类 |
 | simulation 跨折聚合 | 已与生产流水线对齐，并由 RUN_009 实跑确认 |
-| 多 seed mixture recovery | 未验证 |
+| 5-seed null 实际行为 | 无假信号；assessment 边界语义待扩展 |
+| 5-seed scalar 实际行为 | 5/5 建立标量、0/5 假异质性；assessment 待扩展 |
+| 5-seed continuous recovery | 严格 5/5 |
+| 5-seed mixture recovery | 严格 0/5、有效结构 5/5 |
 | density recovery | 未验证 |
 | 完整 calibration | 未通过 |
 | 正式 Safety 修订验证 | 尚未开始 |
@@ -1803,7 +1842,7 @@ mixture 校准失败或成功。
 本文档编写前完整测试结果：
 
 ```text
-50 passed
+51 passed
 ```
 
 测试覆盖：
@@ -1825,15 +1864,15 @@ mixture 校准失败或成功。
 - mixture 候选分数与标准误诊断；
 - simulation/production 跨折众数聚合一致性；
 - 严格 recovery 与有效类别 recovery 并行报告；
-- RUN_005–009 pilot 配置。
+- RUN_005–010 pilot/screening 配置。
 
 测试通过不等于科学结论通过，但能减少代码行为与预期不一致。
 
 ### 20.2 当前 Git 状态
 
-当前已提交工程基线是 `273c070`。RUN_008/009 配置、脚本、测试、
-结构化 JSON 结果、严格/有效双标准和本文档修改将在下一提交归档；
-运行日志、原始数据和凭据不进入 Git。
+RUN_008/009 与严格/有效双标准已归档于 `6b253fa`。RUN_010 配置、脚本、
+20 个 checkpoints、结构化汇总和本文档修改将在下一提交归档；运行日志、
+原始数据和凭据不进入 Git。
 
 在执行正式长运行前，应：
 
@@ -1948,6 +1987,10 @@ ARI 和稳定性均通过。项目从此并行报告严格与有效标准，不�
 - 同时报告严格 recovery rate 与 effective recovery rate；
 - 记录名义类别数、有效类别数、余类总权重、ARI、耗时和边界频率；
 - 即使 effective status 通过，也不得写成严格 calibration 已通过。
+
+RUN_010 已完成。下一步不是重新训练，而是用独立输出文件重新执行
+assessment：扩展 null/scalar 对 M2/M3 最高正则化、无预测改善情形的
+有效解释，同时保持原始 strict status 不变。
 
 ### 阶段 E：density pilot
 
@@ -2208,8 +2251,12 @@ null 的真实图片效用是 0。
 15. RUN_009 median truth ARI 为 0.990、聚合拟合 ARI 为 0.997；
 16. mixture 严格精确类数恢复仍失败，有效三类结构通过修订标准；
 17. 严格与有效 recovery 将并行报告，不能用有效通过覆盖严格失败；
-18. 多 seed 与 density 的完整校准尚未完成；
-19. 因此完整 calibration 尚未通过，正式 Safety 修订验证尚未开始。
+18. RUN_010 的 5-seed screening 已完成：continuous 严格 5/5，mixture
+    有效结构 5/5，null/scalar 实际判断正确但 assessment 尚未覆盖复杂
+    模型高收缩边界；
+19. 原始严格 calibration 与当前 effective status 都仍为 failed；
+20. density 与完整确认性校准尚未完成；
+21. 因此正式 Safety 修订验证尚未开始。
 
 一句话总结：
 
@@ -2232,12 +2279,14 @@ null 的真实图片效用是 0。
 | `configs/calibration_continuous_rule_pilot_cuda.yaml` | RUN_007 continuous 规则复验 |
 | `configs/calibration_mixture_pilot_cuda.yaml` | RUN_008 mixture pilot |
 | `configs/calibration_mixture_aggregation_pilot_cuda.yaml` | RUN_009 跨折聚合复验 |
+| `configs/calibration_multiseed_screening_cuda.yaml` | RUN_010 四机制 × 5 seeds screening |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
 | `scripts/run_continuous_rule_pilot.ps1` | RUN_007 启动脚本 |
 | `scripts/run_mixture_calibration_pilot.ps1` | RUN_008 启动脚本 |
 | `scripts/run_mixture_aggregation_pilot.ps1` | RUN_009 启动脚本 |
+| `scripts/run_multiseed_model_screening.ps1` | RUN_010 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint 与 null assessment |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -2253,3 +2302,4 @@ null 的真实图片效用是 0。
 | `artifacts/run_007_continuous_rule_pilot/` | continuous 规则复验 |
 | `artifacts/run_008_mixture_calibration_pilot/` | mixture 类别数诊断 |
 | `artifacts/run_009_mixture_aggregation_pilot/` | mixture 跨折聚合与空余类诊断 |
+| `artifacts/run_010_multiseed_model_screening/` | 四机制 5-seed screening |

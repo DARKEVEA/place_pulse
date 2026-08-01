@@ -91,6 +91,26 @@ def test_mixture_aggregation_pilot_configuration():
     )
 
 
+def test_multiseed_model_screening_configuration():
+    config = load_config(
+        "configs/calibration_multiseed_screening_cuda.yaml"
+    )
+
+    assert config["simulation"]["model_mechanisms"] == [
+        "null",
+        "scalar",
+        "continuous",
+        "mixture",
+    ]
+    assert config["simulation"]["model_repetitions"] == 5
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_010_multiseed_model_screening"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_010_MULTISEED_MODEL_SCREENING"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

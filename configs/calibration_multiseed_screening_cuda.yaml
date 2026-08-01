@@ -1,0 +1,10 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  model_repetitions: 5
+  model_mechanisms: ["null", "scalar", "continuous", "mixture"]
+  repetitions: 5
+
+reporting:
+  artifacts_dir: artifacts/run_010_multiseed_model_screening
+  run_label: RUN_010_MULTISEED_MODEL_SCREENING
