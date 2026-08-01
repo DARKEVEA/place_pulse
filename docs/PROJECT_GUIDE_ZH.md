@@ -1804,6 +1804,29 @@ score margin 分布进一步支持这一结论：
 阶段的预设确认性校准。它证明的是合成机制下的识别能力，不等于真实 Safety
 数据已经存在 CUSP，也不替代模型恢复阶段和真实数据阶段的其他门槛。
 
+### 17.16 RUN_015 stratified mixture pilot
+
+RUN_015 在冻结提交 `951e46d` 上验证结构分层 shortlist。修复后的策略为：
+
+1. 每个候选 K 保留粗筛最优的一个 L2；
+2. 剩余 refinement 预算再按全局粗筛分数填充；
+3. 最终选择仍只比较完整 fidelity 的交叉熵，不根据真实 K 调整结果。
+
+单次运行耗时 1162.388 秒，即 19 分 22 秒。三个 outer folds 的完整
+refinement 都覆盖 K2/K3/K4/K5；各折选择为 K4、K3、K3，跨折众数严格
+选择 K3。最终结果为：
+
+- verdict：`SCALAR_REJECTED_MIXTURE`；
+- nominal classes：3；
+- effective classes：3；
+- truth ARI、aggregate-fit truth ARI、stability ARI 均为 1.0；
+- 严格 recovery 与有效 recovery 均为 1/1；
+- 没有空余类别权重。
+
+这直接证明 RUN_009 的 K3 过早淘汰问题已被修复：K3 获得 full-fidelity
+比较后，在两折明确胜过 K4/K5，并通过跨折众数严格恢复。它仍只是一个
+seed，不能替代完整恢复率估计。
+
 ---
 
 ## 18. 性能分析
@@ -2410,6 +2433,8 @@ null 的真实图片效用是 0。
     -0.448743，方向正确，已具备运行 RUN_014 的条件。
 26. RUN_014 已完成 100 次确认性 density 校准：CUSP recovery 100/100，
     mixture 假阳性 0/100；两项 95% 精确区间均完整越过预设门槛。
+27. RUN_015 已实现并验证结构分层 mixture shortlist：三折均完整比较
+    K2/K3/K4/K5，最终严格恢复 K3，三项 ARI 均为 1.0。
 
 一句话总结：
 
@@ -2437,6 +2462,7 @@ null 的真实图片效用是 0。
 | `configs/calibration_density_multiseed_cuda.yaml` | RUN_012 五 seed density screening |
 | `configs/calibration_density_diagnostics_cuda.yaml` | RUN_013 负对照诊断字段验证 |
 | `configs/calibration_density_confirmatory_cuda.yaml` | RUN_014 100 次 density 校准 |
+| `configs/calibration_mixture_stratified_pilot_cuda.yaml` | RUN_015 结构分层 mixture pilot |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
@@ -2448,6 +2474,7 @@ null 的真实图片效用是 0。
 | `scripts/run_density_multiseed_screening.ps1` | RUN_012 五 seed density 启动脚本 |
 | `scripts/run_density_diagnostics.ps1` | RUN_013 density 诊断启动脚本 |
 | `scripts/run_density_confirmatory.ps1` | RUN_014 100 次 density 启动脚本 |
+| `scripts/run_mixture_stratified_pilot.ps1` | RUN_015 结构分层 mixture 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint、严格/有效 assessment 与离线重评估 |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -2468,3 +2495,4 @@ null 的真实图片效用是 0。
 | `artifacts/run_012_density_multiseed_screening/` | 五 seed CUSP/density screening |
 | `artifacts/run_013_density_diagnostics/` | mixture 负对照 score/margin 验证 |
 | `artifacts/run_014_density_confirmatory/` | 100 次确认性 CUSP/density 校准 |
+| `artifacts/run_015_mixture_stratified_pilot/` | K 分层 full-fidelity shortlist 验证 |

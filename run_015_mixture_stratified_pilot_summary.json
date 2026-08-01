@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-08-01T22:23:58.4172755+08:00",
+    "finished_at":  "2026-08-01T22:43:20.8054620+08:00",
+    "elapsed_seconds":  1162.388,
+    "elapsed_minutes":  19.373,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_mixture_stratified_pilot_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_015_mixture_stratified_pilot",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_015_mixture_stratified_pilot.log"
+}
