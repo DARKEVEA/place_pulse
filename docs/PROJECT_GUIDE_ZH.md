@@ -1664,6 +1664,47 @@ outer folds 都选择 rank 2。mixture 的最低 median fold truth ARI 为
 下一步只修订 recovery assessment，不覆盖 raw verdict，也不重新训练。
 原始 RUN_010 JSON 必须保留，新的重评结果写入独立文件。
 
+### 17.11 RUN_010 离线重评估
+
+assessment 规则现已扩展，但生产 verdict 和严格恢复标准没有修改。新规则
+只在以下条件全部成立时，把 null/scalar 的技术边界失败解释为有效恢复：
+
+- 报告的 L2 边界全部位于候选网格的最高正则化端；
+- 不允许任何最低正则化边界混入；
+- continuous 与 mixture 都没有达到最低预测改善门槛；
+- null 同时没有 baseline 信号；
+- scalar 同时有明显 baseline 信号，且没有假 continuous/mixture 信号。
+
+此外，新的运行会单独保存 `baseline_edge_predictive_gate`。这个 gate 不受
+无关的 M2/M3 搜索边界影响，因而能证明 scalar-vs-null 的置信区间证据。
+RUN_010 原始文件生成时还没有保存该字段，所以它的 scalar 离线重评估
+只能使用已存 baseline 改善（11.04%–12.18%）和零假异质性作为兼容证据。
+这是明确记录的历史兼容妥协；未来运行必须使用独立 baseline edge gate。
+
+离线命令为：
+
+```powershell
+ppc simulate reassess-models --config configs/calibration_multiseed_screening_cuda.yaml
+```
+
+命令不训练模型、不使用 GPU，并将结果写入
+`metrics/model_recovery_reassessed.json`。原始 `model_recovery.json` 不会
+被覆盖。重评估记录了源文件 SHA-256、assessment 代码哈希、配置哈希和
+规则版本。实际核验中，记录的源哈希与原始文件哈希完全一致。
+
+重评结果为：
+
+| 机制 | 严格恢复率（保持不变） | 有效恢复率 |
+|---|---:|---:|
+| null | 0/5 | 5/5 |
+| scalar | 1/5 | 5/5 |
+| continuous | 5/5 | 5/5 |
+| mixture | 0/5 | 5/5 |
+
+顶层 `status` 仍为 `failed`，顶层 `effective_status` 变为 `ok`。这意味着
+5-seed 机制筛查已经通过预先说明的有效标准，但仍不能声称严格标准通过，
+也不能把 5 seeds 当成最终 100-repetition 确认性证据。
+
 ---
 
 ## 18. 性能分析
@@ -1988,9 +2029,9 @@ ARI 和稳定性均通过。项目从此并行报告严格与有效标准，不�
 - 记录名义类别数、有效类别数、余类总权重、ARI、耗时和边界频率；
 - 即使 effective status 通过，也不得写成严格 calibration 已通过。
 
-RUN_010 已完成。下一步不是重新训练，而是用独立输出文件重新执行
-assessment：扩展 null/scalar 对 M2/M3 最高正则化、无预测改善情形的
-有效解释，同时保持原始 strict status 不变。
+RUN_010 离线 assessment 已完成：原始 strict status 保持失败，有效四机制
+恢复率均为 5/5，`effective_status=ok`。下一步进入 density pilot，不直接
+跳到正式 Safety 结论。
 
 ### 阶段 E：density pilot
 
@@ -2252,11 +2293,12 @@ null 的真实图片效用是 0。
 16. mixture 严格精确类数恢复仍失败，有效三类结构通过修订标准；
 17. 严格与有效 recovery 将并行报告，不能用有效通过覆盖严格失败；
 18. RUN_010 的 5-seed screening 已完成：continuous 严格 5/5，mixture
-    有效结构 5/5，null/scalar 实际判断正确但 assessment 尚未覆盖复杂
-    模型高收缩边界；
-19. 原始严格 calibration 与当前 effective status 都仍为 failed；
-20. density 与完整确认性校准尚未完成；
-21. 因此正式 Safety 修订验证尚未开始。
+    有效结构 5/5，null/scalar 实际判断也符合生成机制；
+19. RUN_010 离线重评估已完成，原始严格 `status=failed` 保持不变，四机制
+    有效恢复率均为 5/5，`effective_status=ok`；
+20. 历史 scalar 结果缺少独立 baseline CI gate，重评估对此妥协已明确归档；
+21. density 与完整确认性校准尚未完成；
+22. 因此正式 Safety 修订验证尚未开始。
 
 一句话总结：
 
@@ -2288,7 +2330,7 @@ null 的真实图片效用是 0。
 | `scripts/run_mixture_aggregation_pilot.ps1` | RUN_009 启动脚本 |
 | `scripts/run_multiseed_model_screening.ps1` | RUN_010 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
-| `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint 与 null assessment |
+| `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint、严格/有效 assessment 与离线重评估 |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
 | `src/placepulse_cusp/data/schema.py` | 原始数据标准化 |
 | `src/placepulse_cusp/data/splits.py` | 防泄漏划分 |

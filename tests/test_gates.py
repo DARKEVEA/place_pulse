@@ -47,5 +47,14 @@ def test_edge_gates_can_be_checked_before_auxiliary_refits():
         {"mean": 0.1, "lower": 0.01, "upper": 0.2},
     )
     assert gates["baseline"]
+    assert gates["baseline_edge"]
     assert gates["continuous"]
     assert not gates["mixture"]
+
+
+def test_baseline_edge_gate_survives_unrelated_search_boundary():
+    verdict, gates = _verdict(boundary=True)
+
+    assert verdict == "MODEL_CALIBRATION_FAILED"
+    assert not gates["baseline_predictive_gate"]
+    assert gates["baseline_edge_predictive_gate"]

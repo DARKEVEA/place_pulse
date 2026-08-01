@@ -26,6 +26,13 @@ from placepulse_cusp.models.base import VoteEncoder, select_device
 from placepulse_cusp.provenance import metadata, write_json
 
 RECOVERY_CHECKPOINT_SCHEMA_VERSION = 1
+MODEL_RECOVERY_ASSESSMENT_POLICY = "high_regularisation_shrinkage_v1"
+MODEL_RECOVERY_TARGETS = {
+    "null": "SCALAR_SIGNAL_NOT_ESTABLISHED",
+    "scalar": "SCALAR_NOT_REJECTED",
+    "continuous": "SCALAR_REJECTED_CONTINUOUS",
+    "mixture": "SCALAR_REJECTED_MIXTURE",
+}
 
 
 @lru_cache(maxsize=1)
@@ -625,6 +632,85 @@ def _model_recovery_once(
     }
 
 
+def _high_regularisation_boundaries_only(
+    config: dict[str, Any],
+    item: dict[str, Any],
+    allowed_parameters: set[str],
+) -> bool:
+    """Return true when every reported L2 boundary is the upper boundary.
+
+    Aggregate selections can be interior even when one outer fold touched a
+    boundary, so fold-level selections are authoritative when available.
+    """
+    candidates = [float(value) for value in config["models"]["l2_candidates"]]
+    if len(set(candidates)) <= 1:
+        return False
+    upper = max(candidates)
+    baseline = item.get("baseline_selection", {})
+    reported = set(baseline.get("selection_boundary_parameters", []))
+    if not reported or not reported.issubset(allowed_parameters):
+        return False
+
+    observed: set[str] = set()
+
+    def record(parameter: str, value: Any) -> bool:
+        observed.add(parameter)
+        try:
+            return float(value) == upper
+        except (TypeError, ValueError):
+            return False
+
+    folds = item.get("outer_fold_selections", [])
+    if isinstance(folds, list) and folds:
+        for fold in folds:
+            fold_baseline = fold.get("baseline", {})
+            for parameter in fold_baseline.get(
+                "selection_boundary_parameters", []
+            ):
+                if parameter not in allowed_parameters or not record(
+                    parameter, fold_baseline.get(parameter)
+                ):
+                    return False
+            if fold.get("continuous_selection_boundary", False) and (
+                "continuous_l2" not in allowed_parameters
+                or not record(
+                    "continuous_l2", fold.get("continuous_l2")
+                )
+            ):
+                return False
+            if fold.get("mixture_selection_boundary", False) and (
+                "mixture_l2" not in allowed_parameters
+                or not record(
+                    "mixture_l2", fold.get("mixture_l2")
+                )
+            ):
+                return False
+
+    value_by_parameter = {
+        "utility_l2": baseline.get("utility_l2"),
+        "style_l2": baseline.get("style_l2"),
+        "continuous_l2": item.get("selected_continuous_l2"),
+        "mixture_l2": item.get("selected_mixture_l2"),
+    }
+    for parameter in reported - observed:
+        if not record(parameter, value_by_parameter.get(parameter)):
+            return False
+    return bool(observed) and observed == reported
+
+
+def _no_complex_predictive_signal(
+    config: dict[str, Any], item: dict[str, Any]
+) -> bool:
+    gates = item.get("gates", {})
+    threshold = float(config["gates"]["min_cross_entropy_reduction"])
+    return (
+        not bool(gates.get("continuous_edge_predictive_gate", True))
+        and not bool(gates.get("mixture_edge_predictive_gate", True))
+        and float(gates.get("continuous_reduction", float("inf"))) < threshold
+        and float(gates.get("mixture_reduction", float("inf"))) < threshold
+    )
+
+
 def _model_recovery_assessment(
     config: dict[str, Any],
     mechanism: str,
@@ -644,32 +730,9 @@ def _model_recovery_assessment(
         reason = "target_verdict"
     elif mechanism == "null":
         gates = item.get("gates", {})
-        baseline = item.get("baseline_selection", {})
-        boundary_parameters = baseline.get(
-            "selection_boundary_parameters", []
+        high_regularisation_boundary = _high_regularisation_boundaries_only(
+            config, item, {"utility_l2", "style_l2"}
         )
-        candidates = [
-            float(value) for value in config["models"]["l2_candidates"]
-        ]
-        upper = max(candidates)
-        high_regularisation_boundary = (
-            len(set(candidates)) > 1
-            and bool(boundary_parameters)
-            and set(boundary_parameters).issubset(
-                {"utility_l2", "style_l2"}
-            )
-        )
-        if "utility_l2" in boundary_parameters:
-            high_regularisation_boundary = (
-                high_regularisation_boundary
-                and float(baseline.get("utility_l2", float("nan"))) == upper
-            )
-        if "style_l2" in boundary_parameters:
-            high_regularisation_boundary = (
-                high_regularisation_boundary
-                and bool(baseline.get("response_styles", False))
-                and float(baseline.get("style_l2", float("nan"))) == upper
-            )
         threshold = float(config["gates"]["min_cross_entropy_reduction"])
         no_predictive_signal = (
             not bool(gates.get("baseline_predictive_gate", True))
@@ -707,7 +770,57 @@ def _model_recovery_assessment(
     strict_recovered = bool(recovered)
     effective_recovered = strict_recovered
     effective_reason = reason
-    if mechanism == "mixture" and not strict_recovered:
+    assessment_evidence = "strict_assessment"
+    if mechanism == "null" and not strict_recovered:
+        gates = item.get("gates", {})
+        threshold = float(config["gates"]["min_cross_entropy_reduction"])
+        effective_recovered = (
+            item.get("verdict") == "MODEL_CALIBRATION_FAILED"
+            and _high_regularisation_boundaries_only(
+                config,
+                item,
+                {
+                    "utility_l2",
+                    "style_l2",
+                    "continuous_l2",
+                    "mixture_l2",
+                },
+            )
+            and not bool(gates.get("baseline_predictive_gate", True))
+            and float(gates.get("baseline_reduction", float("inf")))
+            < threshold
+            and _no_complex_predictive_signal(config, item)
+        )
+        if effective_recovered:
+            effective_reason = "null_high_regularisation_shrinkage"
+            assessment_evidence = "stored_predictive_reductions_and_gates"
+    elif mechanism == "scalar" and not strict_recovered:
+        gates = item.get("gates", {})
+        threshold = float(config["gates"]["min_cross_entropy_reduction"])
+        baseline_edge = gates.get("baseline_edge_predictive_gate")
+        baseline_signal = (
+            bool(baseline_edge)
+            if baseline_edge is not None
+            else float(gates.get("baseline_reduction", float("-inf")))
+            >= threshold
+        )
+        effective_recovered = (
+            item.get("verdict") == "MODEL_CALIBRATION_FAILED"
+            and bool(gates.get("simulation_gate", True))
+            and baseline_signal
+            and _high_regularisation_boundaries_only(
+                config, item, {"continuous_l2", "mixture_l2"}
+            )
+            and _no_complex_predictive_signal(config, item)
+        )
+        if effective_recovered:
+            effective_reason = "scalar_complex_models_shrunk_at_upper_boundary"
+            assessment_evidence = (
+                "baseline_edge_gate"
+                if baseline_edge is not None
+                else "legacy_baseline_reduction_without_stored_ci"
+            )
+    elif mechanism == "mixture" and not strict_recovered:
         effective_classes = item.get(
             "effective_classes", item.get("selected_classes")
         )
@@ -721,14 +834,96 @@ def _model_recovery_assessment(
         )
         if effective_recovered:
             effective_reason = "effective_mixture_structure_recovered"
+            assessment_evidence = "effective_class_weight_and_stability"
     return {
         "recovered": strict_recovered,
         "strict_recovered": strict_recovered,
         "effective_recovered": bool(effective_recovered),
         "reason": reason,
         "effective_reason": effective_reason,
+        "assessment_policy": MODEL_RECOVERY_ASSESSMENT_POLICY,
+        "assessment_evidence": assessment_evidence,
         "target_verdict": target_verdict,
         "raw_verdict": item.get("verdict"),
+    }
+
+
+def _summarise_model_recovery(
+    config: dict[str, Any],
+    mechanisms: list[str],
+    repetitions: int,
+    details: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rates: dict[str, float] = {}
+    effective_rates: dict[str, float] = {}
+    for mechanism in mechanisms:
+        mechanism_items = [
+            item for item in details if item.get("mechanism") == mechanism
+        ]
+        denominator = max(len(mechanism_items), 1)
+        rates[mechanism] = sum(
+            bool(item["recovery_assessment"]["strict_recovered"])
+            for item in mechanism_items
+        ) / denominator
+        effective_rates[mechanism] = sum(
+            bool(item["recovery_assessment"]["effective_recovered"])
+            for item in mechanism_items
+        ) / denominator
+
+    scalar_items = [
+        item for item in details if item.get("mechanism") == "scalar"
+    ]
+    scalar_false_rejection = sum(
+        item.get("verdict")
+        in {"SCALAR_REJECTED_CONTINUOUS", "SCALAR_REJECTED_MIXTURE"}
+        for item in scalar_items
+    ) / max(len(scalar_items), 1)
+    mixture_truth_ari = [
+        item.get("truth_ari", 0.0)
+        for item in details
+        if item.get("mechanism") == "mixture"
+    ]
+    median_mixture_truth_ari = (
+        float(np.median(mixture_truth_ari)) if mixture_truth_ari else None
+    )
+    recovery_min = config["simulation"]["recovery_min_rate"]
+    recovery_ok = all(
+        rates[mechanism]
+        >= (0.95 if mechanism == "null" else recovery_min)
+        for mechanism in mechanisms
+    )
+    effective_recovery_ok = all(
+        effective_rates[mechanism]
+        >= (0.95 if mechanism == "null" else recovery_min)
+        for mechanism in mechanisms
+    )
+    mixture_ok = (
+        "mixture" not in mechanisms
+        or (
+            median_mixture_truth_ari is not None
+            and median_mixture_truth_ari >= config["gates"]["min_ari"]
+        )
+    )
+    scalar_ok = (
+        "scalar" not in mechanisms
+        or scalar_false_rejection
+        <= config["simulation"]["scalar_max_false_positive"]
+    )
+    return {
+        "status": "ok" if recovery_ok and mixture_ok and scalar_ok else "failed",
+        "effective_status": (
+            "ok"
+            if effective_recovery_ok and mixture_ok and scalar_ok
+            else "failed"
+        ),
+        "mechanisms": mechanisms,
+        "recovery_rates": rates,
+        "effective_recovery_rates": effective_rates,
+        "scalar_false_rejection_rate": scalar_false_rejection,
+        "median_mixture_truth_ari": median_mixture_truth_ari,
+        "repetitions": repetitions,
+        "details": details,
+        "provenance": metadata(config),
     }
 
 
@@ -738,12 +933,7 @@ def validate_model_recovery(
     repetitions = int(
         config["simulation"].get("model_repetitions", config["simulation"]["repetitions"])
     )
-    all_expected = {
-        "null": "SCALAR_SIGNAL_NOT_ESTABLISHED",
-        "scalar": "SCALAR_NOT_REJECTED",
-        "continuous": "SCALAR_REJECTED_CONTINUOUS",
-        "mixture": "SCALAR_REJECTED_MIXTURE",
-    }
+    all_expected = MODEL_RECOVERY_TARGETS
     mechanisms = config["simulation"].get(
         "model_mechanisms", list(all_expected)
     )
@@ -761,12 +951,8 @@ def validate_model_recovery(
         mechanism: all_expected[mechanism] for mechanism in mechanisms
     }
     details = []
-    rates = {}
-    effective_rates = {}
     total = len(expected) * repetitions
     for mechanism, target in expected.items():
-        matches = 0
-        effective_matches = 0
         for repetition in range(repetitions):
             cached = (
                 _load_repetition_checkpoint(
@@ -813,67 +999,9 @@ def validate_model_recovery(
                 total=total,
                 status="running",
             )
-            matches += item["recovery_assessment"]["recovered"]
-            effective_matches += item["recovery_assessment"][
-                "effective_recovered"
-            ]
-        rates[mechanism] = matches / max(repetitions, 1)
-        effective_rates[mechanism] = (
-            effective_matches / max(repetitions, 1)
-        )
-    scalar_false_rejection = sum(
-        item["mechanism"] == "scalar"
-        and item["verdict"]
-        in {"SCALAR_REJECTED_CONTINUOUS", "SCALAR_REJECTED_MIXTURE"}
-        for item in details
-    ) / max(repetitions, 1)
-    recovery_min = config["simulation"]["recovery_min_rate"]
-    mixture_truth_ari = [
-        item.get("truth_ari", 0.0)
-        for item in details
-        if item["mechanism"] == "mixture"
-    ]
-    median_mixture_truth_ari = (
-        float(np.median(mixture_truth_ari)) if mixture_truth_ari else None
+    result = _summarise_model_recovery(
+        config, mechanisms, repetitions, details
     )
-    recovery_ok = all(
-        rates[mechanism]
-        >= (0.95 if mechanism == "null" else recovery_min)
-        for mechanism in mechanisms
-    )
-    effective_recovery_ok = all(
-        effective_rates[mechanism]
-        >= (0.95 if mechanism == "null" else recovery_min)
-        for mechanism in mechanisms
-    )
-    mixture_ok = (
-        "mixture" not in mechanisms
-        or (
-            median_mixture_truth_ari is not None
-            and median_mixture_truth_ari >= config["gates"]["min_ari"]
-        )
-    )
-    scalar_ok = (
-        "scalar" not in mechanisms
-        or scalar_false_rejection
-        <= config["simulation"]["scalar_max_false_positive"]
-    )
-    result = {
-        "status": "ok" if recovery_ok and mixture_ok and scalar_ok else "failed",
-        "effective_status": (
-            "ok"
-            if effective_recovery_ok and mixture_ok and scalar_ok
-            else "failed"
-        ),
-        "mechanisms": mechanisms,
-        "recovery_rates": rates,
-        "effective_recovery_rates": effective_rates,
-        "scalar_false_rejection_rate": scalar_false_rejection,
-        "median_mixture_truth_ari": median_mixture_truth_ari,
-        "repetitions": repetitions,
-        "details": details,
-        "provenance": metadata(config),
-    }
     target = (
         Path(config["reporting"]["artifacts_dir"])
         / "metrics"
@@ -887,4 +1015,57 @@ def validate_model_recovery(
         total=total,
         status="complete",
     )
+    return result
+
+
+def reassess_model_recovery(
+    config: dict[str, Any], source: str | Path | None = None
+) -> dict[str, Any]:
+    """Reapply the current assessment policy to stored simulation results.
+
+    The raw result is never overwritten. This function changes assessment
+    fields only and does not fit or select any model.
+    """
+    metrics_dir = Path(config["reporting"]["artifacts_dir"]) / "metrics"
+    source_path = (
+        Path(source)
+        if source is not None
+        else metrics_dir / "model_recovery.json"
+    )
+    source_bytes = source_path.read_bytes()
+    payload = json.loads(source_bytes.decode("utf-8"))
+    mechanisms = payload.get("mechanisms")
+    details = payload.get("details")
+    repetitions = int(payload.get("repetitions", 0))
+    if not isinstance(mechanisms, list) or not mechanisms:
+        raise ValueError("Stored model recovery result has no mechanisms")
+    if not isinstance(details, list) or not details:
+        raise ValueError("Stored model recovery result has no details")
+    if any(mechanism not in MODEL_RECOVERY_TARGETS for mechanism in mechanisms):
+        raise ValueError("Stored model recovery result contains an unknown mechanism")
+
+    reassessed_details = []
+    for raw_item in details:
+        item = dict(raw_item)
+        mechanism = item.get("mechanism")
+        if mechanism not in mechanisms:
+            raise ValueError("Stored model recovery detail has an unknown mechanism")
+        item["recovery_assessment"] = _model_recovery_assessment(
+            config, mechanism, MODEL_RECOVERY_TARGETS[mechanism], item
+        )
+        reassessed_details.append(item)
+
+    result = _summarise_model_recovery(
+        config, mechanisms, repetitions, reassessed_details
+    )
+    result["assessment_provenance"] = {
+        "policy": MODEL_RECOVERY_ASSESSMENT_POLICY,
+        "source_path": str(source_path),
+        "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "assessment_code_hash": _recovery_code_hash(),
+        "assessment_config_hash": config.get("_meta", {}).get("hash"),
+        "raw_result_preserved": True,
+    }
+    target = metrics_dir / "model_recovery_reassessed.json"
+    write_json(target, result)
     return result

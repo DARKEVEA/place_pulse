@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 
 from placepulse_cusp.config import load_config
@@ -406,3 +408,121 @@ def test_model_recovery_reports_strict_and_effective_rates(
     assert result["effective_status"] == "ok"
     assert result["recovery_rates"] == {"mixture": 0.0}
     assert result["effective_recovery_rates"] == {"mixture": 1.0}
+
+
+def _complex_boundary_item(mechanism, *, boundary_value, baseline_reduction):
+    return {
+        "mechanism": mechanism,
+        "verdict": "MODEL_CALIBRATION_FAILED",
+        "gates": {
+            "simulation_gate": True,
+            "baseline_predictive_gate": False,
+            "continuous_edge_predictive_gate": False,
+            "mixture_edge_predictive_gate": False,
+            "baseline_reduction": baseline_reduction,
+            "continuous_reduction": 0.0,
+            "mixture_reduction": -0.001,
+        },
+        "baseline_selection": {
+            "utility_l2": 100.0 if mechanism == "null" else 0.1,
+            "style_l2": 100.0,
+            "response_styles": False,
+            "selection_boundary": True,
+            "selection_boundary_parameters": (
+                ["utility_l2", "continuous_l2", "mixture_l2"]
+                if mechanism == "null"
+                else ["continuous_l2", "mixture_l2"]
+            ),
+        },
+        "selected_continuous_l2": boundary_value,
+        "selected_mixture_l2": boundary_value,
+        "outer_fold_selections": [
+            {
+                "baseline": {
+                    "utility_l2": 100.0 if mechanism == "null" else 0.1,
+                    "selection_boundary_parameters": (
+                        ["utility_l2"] if mechanism == "null" else []
+                    ),
+                },
+                "continuous_l2": boundary_value,
+                "continuous_selection_boundary": True,
+                "mixture_l2": boundary_value,
+                "mixture_selection_boundary": True,
+            }
+        ],
+    }
+
+
+def test_null_effective_recovery_accepts_complex_upper_shrinkage():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 10.0, 100.0]
+    item = _complex_boundary_item("null", boundary_value=100.0, baseline_reduction=0.0)
+
+    assessment = recovery._model_recovery_assessment(
+        config, "null", "SCALAR_SIGNAL_NOT_ESTABLISHED", item
+    )
+
+    assert not assessment["strict_recovered"]
+    assert assessment["effective_recovered"]
+    assert assessment["effective_reason"] == "null_high_regularisation_shrinkage"
+
+
+def test_scalar_effective_recovery_accepts_complex_upper_shrinkage():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 10.0, 100.0]
+    item = _complex_boundary_item(
+        "scalar", boundary_value=100.0, baseline_reduction=0.1
+    )
+
+    assessment = recovery._model_recovery_assessment(
+        config, "scalar", "SCALAR_NOT_REJECTED", item
+    )
+
+    assert not assessment["strict_recovered"]
+    assert assessment["effective_recovered"]
+    assert assessment["assessment_evidence"] == (
+        "legacy_baseline_reduction_without_stored_ci"
+    )
+
+
+def test_effective_recovery_rejects_complex_lower_boundary():
+    config = load_config("configs/smoke.yaml")
+    config["models"]["l2_candidates"] = [0.1, 10.0, 100.0]
+    item = _complex_boundary_item("scalar", boundary_value=0.1, baseline_reduction=0.1)
+
+    assessment = recovery._model_recovery_assessment(
+        config, "scalar", "SCALAR_NOT_REJECTED", item
+    )
+
+    assert not assessment["effective_recovered"]
+
+
+def test_reassessment_preserves_raw_result_and_writes_separate_file(tmp_path):
+    config = _checkpoint_config(tmp_path)
+    config["models"]["l2_candidates"] = [0.1, 10.0, 100.0]
+    source = tmp_path / "artifacts" / "metrics" / "model_recovery.json"
+    source.parent.mkdir(parents=True)
+    item = _complex_boundary_item("null", boundary_value=100.0, baseline_reduction=0.0)
+    item["repetition"] = 0
+    source.write_text(
+        json.dumps(
+            {
+                "mechanisms": ["null"],
+                "repetitions": 1,
+                "details": [item],
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = source.read_bytes()
+
+    result = recovery.reassess_model_recovery(config)
+
+    assert source.read_bytes() == before
+    assert result["status"] == "failed"
+    assert result["effective_status"] == "ok"
+    assert result["effective_recovery_rates"] == {"null": 1.0}
+    assert result["assessment_provenance"]["raw_result_preserved"]
+    assert (
+        source.parent / "model_recovery_reassessed.json"
+    ).exists()

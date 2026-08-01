@@ -24,12 +24,12 @@ def edge_predictive_gates(
     """
     threshold = config["gates"]["min_cross_entropy_reduction"]
     baseline_reduction = (m0_ce - scalar_ce) / max(m0_ce, 1e-12)
-    baseline_ok = (
+    baseline_edge_ok = (
         baseline_reduction >= threshold
         and scalar_vs_m0_ci["lower"] > 0
-        and not selection_boundary
         and simulation_ok
     )
+    baseline_ok = baseline_edge_ok and not selection_boundary
 
     def qualifies(ce: float, ci: dict[str, float]) -> bool:
         reduction = (scalar_ce - ce) / max(scalar_ce, 1e-12)
@@ -37,6 +37,7 @@ def edge_predictive_gates(
 
     return {
         "baseline": baseline_ok,
+        "baseline_edge": baseline_edge_ok,
         "continuous": qualifies(continuous_ce, continuous_ci),
         "mixture": qualifies(mixture_ce, mixture_ci),
         "baseline_reduction": baseline_reduction,
@@ -100,6 +101,7 @@ def heterogeneity_verdict(
         "continuous_predictive_gate": continuous_ok,
         "continuous_edge_predictive_gate": edge["continuous"],
         "baseline_predictive_gate": baseline_ok,
+        "baseline_edge_predictive_gate": edge["baseline_edge"],
         "simulation_gate": simulation_ok,
         "selection_boundary_gate": not selection_boundary,
         "baseline_reduction": edge["baseline_reduction"],

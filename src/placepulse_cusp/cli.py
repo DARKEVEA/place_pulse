@@ -15,6 +15,7 @@ from placepulse_cusp.pipeline import run_all, run_cusp_stage, run_dimension
 from placepulse_cusp.reporting.report import build_report
 from placepulse_cusp.simulation.generate import generate_vote_table
 from placepulse_cusp.simulation.recovery import (
+    reassess_model_recovery,
     validate_density_recovery,
     validate_model_recovery,
 )
@@ -40,6 +41,8 @@ def _parser() -> argparse.ArgumentParser:
         default="mixture",
     )
     simulate_sub.add_parser("validate-models")
+    reassess = simulate_sub.add_parser("reassess-models")
+    reassess.add_argument("--source")
     simulate_sub.add_parser("validate-density")
 
     run = sub.add_parser("run")
@@ -132,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
             result = {"path": str(generate_vote_table(config, mechanism=args.mechanism))}
         elif args.action == "validate-models":
             result = validate_model_recovery(config, resume=args.resume)
+        elif args.action == "reassess-models":
+            result = reassess_model_recovery(config, source=args.source)
         else:
             result = validate_density_recovery(config, resume=args.resume)
     elif args.group == "run":
