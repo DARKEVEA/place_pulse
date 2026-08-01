@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "config_hash": "da466251efd8f29f4b7336fce34336025a70c28d1a11ac25e1e7bffb29d6a3b3",
+  "code_hash": "cec58fd51b2580060e39b20987221610e5861a58ac1062966c2dcff7cc87fcdc",
+  "family": "density_recovery",
+  "mechanism": "density",
+  "repetition": 1,
+  "result": {
+    "repetition": 1,
+    "cusp_score": -0.7085560441233407,
+    "mixture_score": -0.7400286480979195,
+    "cusp_win": true,
+    "mixture_false_cusp_win": false
+  }
+}

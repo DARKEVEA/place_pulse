@@ -1,0 +1,13 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-08-01T12:31:56.0392693+08:00",
+    "finished_at":  "2026-08-01T12:32:39.6313119+08:00",
+    "elapsed_seconds":  43.592,
+    "elapsed_minutes":  0.727,
+    "execution_backend":  "cpu_scipy_numpy",
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_density_multiseed_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_012_density_multiseed_screening",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_012_density_multiseed_screening.log"
+}
