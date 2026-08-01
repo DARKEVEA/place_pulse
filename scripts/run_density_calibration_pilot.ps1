@@ -32,7 +32,7 @@ if ($Resume) {
 
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 $startedAt = Get-Date
-Write-Host "RUN_011 density pilot uses the CPU implementation; GPU availability is irrelevant."
+Write-Host "$RunName uses the CPU density implementation; GPU availability is irrelevant."
 Write-Host "Pilot started at $($startedAt.ToString('o'))"
 Write-Host "Command: ppc $($arguments -join ' ')"
 
