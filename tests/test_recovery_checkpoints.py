@@ -127,6 +127,18 @@ def test_density_pilot_configuration():
     )
 
 
+def test_density_multiseed_configuration():
+    config = load_config("configs/calibration_density_multiseed_cuda.yaml")
+
+    assert config["simulation"]["repetitions"] == 5
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_012_density_multiseed_screening"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_012_DENSITY_MULTISEED_SCREENING"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

@@ -1,13 +1,19 @@
 param(
-    [switch]$Resume
+    [switch]$Resume,
+    [string]$ConfigRelativePath = "configs\calibration_density_pilot_cuda.yaml",
+    [string]$RunName = "run_011_density_calibration_pilot"
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$configPath = Join-Path $repoRoot "configs\calibration_density_pilot_cuda.yaml"
-$artifactRoot = Join-Path $repoRoot "artifacts\run_011_density_calibration_pilot"
-$logPath = Join-Path $repoRoot "run_011_density_calibration_pilot.log"
-$summaryPath = Join-Path $repoRoot "run_011_density_calibration_pilot_summary.json"
+$configPath = if ([System.IO.Path]::IsPathRooted($ConfigRelativePath)) {
+    $ConfigRelativePath
+} else {
+    Join-Path $repoRoot $ConfigRelativePath
+}
+$artifactRoot = Join-Path $repoRoot "artifacts\$RunName"
+$logPath = Join-Path $repoRoot "$RunName.log"
+$summaryPath = Join-Path $repoRoot "${RunName}_summary.json"
 
 if ($env:CONDA_DEFAULT_ENV -ne "arch") {
     throw "Activate the arch environment first: conda activate arch"

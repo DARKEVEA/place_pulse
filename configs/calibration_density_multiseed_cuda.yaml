@@ -1,0 +1,8 @@
+extends: calibration_cuda.yaml
+
+simulation:
+  repetitions: 5
+
+reporting:
+  artifacts_dir: artifacts/run_012_density_multiseed_screening
+  run_label: RUN_012_DENSITY_MULTISEED_SCREENING
