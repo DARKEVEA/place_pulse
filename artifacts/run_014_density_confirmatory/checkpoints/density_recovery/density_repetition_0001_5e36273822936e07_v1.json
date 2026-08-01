@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "config_hash": "5e36273822936e0742ad80a0e6a7e7313f98488c543226f1aaa4d540c5d132b1",
+  "code_hash": "fde05f88ec543515d1ef2d05ed64f3c8748d0c68f75d60558ba69c3b23005625",
+  "family": "density_recovery",
+  "mechanism": "density",
+  "repetition": 1,
+  "result": {
+    "repetition": 1,
+    "cusp_score": -0.7085560441233407,
+    "mixture_score": -0.7400286480979195,
+    "cusp_win": true,
+    "mixture_cusp_score": -1.8560846302013803,
+    "mixture_reference_score": -1.4945343395880162,
+    "mixture_cusp_margin": -0.3615502906133641,
+    "mixture_false_cusp_win": false
+  }
+}

@@ -1772,6 +1772,37 @@ RUN_013 在冻结提交 `b507057` 上验证新增的 mixture 负对照诊断字�
 方向与负对照预期一致。该改动只增加诊断字段，没有修改胜负判定、恢复率
 门槛或数据生成过程，因此可以冻结并进入 RUN_014 的 100 次 density 校准。
 
+### 17.15 RUN_014 confirmatory density validation
+
+RUN_014 在冻结提交 `0266acc` 和固定配置哈希
+`5e36273822936e0742ad80a0e6a7e7313f98488c543226f1aaa4d540c5d132b1`
+上完成 100 个 repetitions。总耗时 787.391 秒，即 13 分 7 秒；100 个
+checkpoints 全部保存，progress 为 complete，没有 NaN、Inf、优化异常或
+实验失败。
+
+确认性结果为：
+
+| 指标 | 观测值 | 预设门槛 | 95% 精确二项区间 | 判定 |
+|---|---:|---:|---:|---|
+| CUSP recovery | 100/100 = 100% | ≥ 80% | 96.38%–100% | 通过 |
+| mixture 假 CUSP | 0/100 = 0% | ≤ 10% | 0%–3.62% | 通过 |
+
+重要的是，置信区间也完整越过门槛：recovery 的保守下界仍高于 80%，假阳性
+率的保守上界仍低于 10%。因此这不只是点估计碰巧通过，而是当前合成设计下
+有统计余量的 density calibration 通过。
+
+score margin 分布进一步支持这一结论：
+
+| margin | 均值 | 中位数 | 最小值 | 5% 分位 | 95% 分位 | 最大值 |
+|---|---:|---:|---:|---:|---:|---:|
+| CUSP 正例 | 0.083514 | 0.083682 | 0.031473 | 0.048325 | 0.114889 | 0.121188 |
+| mixture 负对照 | -0.425289 | -0.426092 | -0.503254 | -0.478317 | -0.372474 | -0.346687 |
+
+100 个正例 margin 全部大于零，100 个负对照 margin 全部小于零，且最接近
+零的两端仍分别为 +0.031473 和 -0.346687。RUN_014 因而完成了 density/CUSP
+阶段的预设确认性校准。它证明的是合成机制下的识别能力，不等于真实 Safety
+数据已经存在 CUSP，也不替代模型恢复阶段和真实数据阶段的其他门槛。
+
 ---
 
 ## 18. 性能分析
@@ -2109,9 +2140,9 @@ RUN_010 离线 assessment 已完成：原始 strict status 保持失败，有效
 - SciPy CPU 阶段的真实耗时；
 - density checkpoint。
 
-RUN_011 单次 pilot、RUN_012 五 seed screening 和 RUN_013 负对照字段验证
-均已通过。RUN_013 没有修改 gate，下一步运行冻结的 RUN_014 100 次 density
-校准，以估计 recovery 与 mixture 假阳性率。
+RUN_011 单次 pilot、RUN_012 五 seed screening、RUN_013 诊断字段验证和
+RUN_014 100 次确认性 density 校准均已通过。density 阶段已经完成；下一步
+回到 model recovery 的 mixture multi-fidelity shortlist 方法债务与完整校准。
 
 ### 阶段 F：冻结完整 calibration
 
@@ -2376,6 +2407,8 @@ null 的真实图片效用是 0。
     0/5、耗时 43.592 秒；它支持扩大验证，但不替代 100 次确认性实验。
 25. RUN_013 已补齐并验证 mixture 负对照 score/margin；负 margin 为
     -0.448743，方向正确，已具备运行 RUN_014 的条件。
+26. RUN_014 已完成 100 次确认性 density 校准：CUSP recovery 100/100，
+    mixture 假阳性 0/100；两项 95% 精确区间均完整越过预设门槛。
 
 一句话总结：
 
@@ -2433,3 +2466,4 @@ null 的真实图片效用是 0。
 | `artifacts/run_011_density_calibration_pilot/` | 单次 CUSP/density recovery pilot |
 | `artifacts/run_012_density_multiseed_screening/` | 五 seed CUSP/density screening |
 | `artifacts/run_013_density_diagnostics/` | mixture 负对照 score/margin 验证 |
+| `artifacts/run_014_density_confirmatory/` | 100 次确认性 CUSP/density 校准 |
