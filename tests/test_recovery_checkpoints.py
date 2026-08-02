@@ -196,6 +196,24 @@ def test_boundary_relevance_pilot_configuration():
     )
 
 
+def test_provisional_multiseed_configuration():
+    config = load_config("configs/calibration_provisional_multiseed_cuda.yaml")
+
+    assert config["simulation"]["model_repetitions"] == 5
+    assert config["simulation"]["model_mechanisms"] == [
+        "null",
+        "scalar",
+        "continuous",
+        "mixture",
+    ]
+    assert config["reporting"]["artifacts_dir"] == (
+        "artifacts/run_017_provisional_multiseed"
+    )
+    assert config["reporting"]["run_label"] == (
+        "RUN_017_PROVISIONAL_MULTISEED"
+    )
+
+
 def test_recovery_selection_aggregation_uses_outer_fold_modes():
     def selection(fold, classes, mixture_l2, rank, continuous_l2):
         return {

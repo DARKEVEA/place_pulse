@@ -1844,6 +1844,26 @@ RUN_010 还显示：null/scalar 中没有预测收益的 M2/M3 常选择最高 L
 防止一个明确未获支持的复杂候选阻断 null/scalar 的正确结论。RUN_016 将
 专门用 null 与 scalar 实跑验证，再冻结完整 model recovery。
 
+### 17.18 RUN_016 boundary relevance pilot
+
+RUN_016 在冻结提交 `c747b93` 上对 null 和 scalar 各运行一次，耗时
+1885.452 秒，即 31 分 25 秒。结果为：
+
+| 机制 | raw verdict | 严格恢复 | 检测到边界 | 相关边界 |
+|---|---|---|---|---|
+| null | SCALAR_SIGNAL_NOT_ESTABLISHED | 1/1 | 是 | 否 |
+| scalar | SCALAR_NOT_REJECTED | 1/1 | 否 | 否 |
+
+null 仍完整记录 utility/continuous/mixture 最高 L2 边界，但 baseline、
+continuous、mixture 改善都低于门槛，因此 raw verdict 直接正确，不需要离线
+assessment 改写。scalar baseline 改善明显，复杂模型没有假异质性，
+`scalar_false_rejection_rate=0`。顶层严格和有效状态均为 ok。
+
+用户随后明确放宽前置标准：不等待四机制各 100 次才重启 Safety，而是在
+冻结新规则后运行四机制各 5 seeds。若 RUN_017 行为稳定，则允许进入明确
+标记为 provisional/exploratory 的 Safety 验证；这不等价于完整确认性
+model-recovery calibration。
+
 ---
 
 ## 18. 性能分析
@@ -2481,6 +2501,7 @@ null 的真实图片效用是 0。
 | `configs/calibration_density_confirmatory_cuda.yaml` | RUN_014 100 次 density 校准 |
 | `configs/calibration_mixture_stratified_pilot_cuda.yaml` | RUN_015 结构分层 mixture pilot |
 | `configs/calibration_boundary_relevance_pilot_cuda.yaml` | RUN_016 null/scalar 边界相关性 pilot |
+| `configs/calibration_provisional_multiseed_cuda.yaml` | RUN_017 四机制 × 5 seeds provisional screening |
 | `scripts/run_calibration_pilot.ps1` | Windows pilot 启动脚本 |
 | `scripts/run_scalar_calibration_pilot.ps1` | RUN_005 启动脚本 |
 | `scripts/run_continuous_calibration_pilot.ps1` | RUN_006 启动脚本 |
@@ -2494,6 +2515,7 @@ null 的真实图片效用是 0。
 | `scripts/run_density_confirmatory.ps1` | RUN_014 100 次 density 启动脚本 |
 | `scripts/run_mixture_stratified_pilot.ps1` | RUN_015 结构分层 mixture 启动脚本 |
 | `scripts/run_boundary_relevance_pilot.ps1` | RUN_016 null/scalar 边界 pilot |
+| `scripts/run_provisional_multiseed.ps1` | RUN_017 provisional multiseed 启动脚本 |
 | `src/placepulse_cusp/pipeline.py` | 主模型流水线 |
 | `src/placepulse_cusp/simulation/recovery.py` | 合成恢复、checkpoint、严格/有效 assessment 与离线重评估 |
 | `src/placepulse_cusp/evaluation/gates.py` | 统计闸门 |
@@ -2515,3 +2537,4 @@ null 的真实图片效用是 0。
 | `artifacts/run_013_density_diagnostics/` | mixture 负对照 score/margin 验证 |
 | `artifacts/run_014_density_confirmatory/` | 100 次确认性 CUSP/density 校准 |
 | `artifacts/run_015_mixture_stratified_pilot/` | K 分层 full-fidelity shortlist 验证 |
+| `artifacts/run_016_boundary_relevance_pilot/` | null/scalar 边界相关性验证 |

@@ -1,0 +1,12 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  false,
+    "started_at":  "2026-08-01T23:25:40.4708576+08:00",
+    "finished_at":  "2026-08-01T23:57:05.9227226+08:00",
+    "elapsed_seconds":  1885.452,
+    "elapsed_minutes":  31.424,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\calibration_boundary_relevance_pilot_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_016_boundary_relevance_pilot",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_016_boundary_relevance_pilot.log"
+}
