@@ -23,14 +23,20 @@ def clustered_elpd_bootstrap(
     ci: float = 0.95,
 ) -> dict[str, float]:
     difference = candidate_scores - baseline_scores
-    unique = np.unique(clusters)
-    groups = {cluster: np.where(clusters == cluster)[0] for cluster in unique}
+    unique, inverse = np.unique(clusters, return_inverse=True)
+    cluster_sums = np.bincount(inverse, weights=difference)
+    cluster_counts = np.bincount(inverse)
     rng = np.random.default_rng(seed)
     samples = []
     for _ in range(repetitions):
         selected = rng.choice(unique, len(unique), replace=True)
-        indices = np.concatenate([groups[x] for x in selected])
-        samples.append(float(difference[indices].mean()))
+        selected_indices = np.searchsorted(unique, selected)
+        samples.append(
+            float(
+                cluster_sums[selected_indices].sum()
+                / cluster_counts[selected_indices].sum()
+            )
+        )
     alpha = (1 - ci) / 2
     return {
         "mean": float(difference.mean()),

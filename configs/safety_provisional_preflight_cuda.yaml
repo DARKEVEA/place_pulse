@@ -1,0 +1,10 @@
+extends: real_preflight_cuda.yaml
+
+simulation:
+  calibration_manifest: calibration_manifests/run_017_provisional_safety.json
+  calibration_policy: provisional_effective
+
+reporting:
+  artifacts_dir: artifacts/run_018_safety_preflight
+  run_label: RUN_018_SAFETY_PROVISIONAL_PREFLIGHT
+  preflight_only: true

@@ -1,0 +1,8 @@
+extends: ../safety_provisional_multiseed_cuda.yaml
+
+project:
+  seed: 5527
+
+reporting:
+  artifacts_dir: artifacts/run_019_safety_provisional_multiseed/seed_5527
+  run_label: RUN_019_SAFETY_PROVISIONAL_SEED_5527

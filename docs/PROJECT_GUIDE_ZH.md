@@ -2538,3 +2538,97 @@ null 的真实图片效用是 0。
 | `artifacts/run_014_density_confirmatory/` | 100 次确认性 CUSP/density 校准 |
 | `artifacts/run_015_mixture_stratified_pilot/` | K 分层 full-fidelity shortlist 验证 |
 | `artifacts/run_016_boundary_relevance_pilot/` | null/scalar 边界相关性验证 |
+
+---
+
+## 27. RUN_017 准入策略与 RUN_018 Safety 工程预检
+
+### 27.1 当前采用的准入边界
+
+RUN_017 完成四种生成机制 × 5 seeds：null、scalar、continuous 的严格恢复均为
+5/5；mixture 的名义精确 K3 恢复为 1/5，但五次均判定为 mixture，按空类别权重
+折算后的有效三类结构为 5/5。因此原始结果必须继续同时报告：
+
+- 严格 `status=failed`；
+- 有效 `effective_status=ok`；
+- 不能声称完整严格 model-recovery calibration 已通过。
+
+项目新增显式 `provisional_effective` policy，仅允许探索性 Safety 工作读取 RUN_017 的
+`effective_status`。Density 仍必须读取 RUN_014 的严格 `status=ok`。默认 policy 仍是
+`strict`，不会因为存在有效恢复字段而自动放宽。
+
+`calibration_manifests/run_017_provisional_safety.json` 分别冻结 RUN_017 model recovery
+和 RUN_014 density recovery 的路径与 SHA-256。任何文件内容发生变化都会导致加载失败，
+不能通过复制、改写 `status` 或替换同名文件绕过门控。使用该 manifest 产生的结果必须记录：
+
+```text
+policy = provisional_effective
+confirmatory = false
+```
+
+### 27.2 RUN_018 工程 preflight
+
+RUN_018 使用 `configs/safety_provisional_preflight_cuda.yaml` 和
+`scripts/run_safety_preflight.ps1` 验证以下链路：
+
+1. 两份冻结校准 artifact 的存在性和 SHA-256；
+2. provisional policy 的显式准入；
+3. 真实 Safety 数据读取和防泄漏 folds；
+4. CUDA 模型选择、预测和 checkpoint 落盘；
+5. clustered ELPD bootstrap 和结果 JSON 写出；
+6. `--resume` 是否能复用完整结果。
+
+最终工程 preflight 于 2026-08-03 完成：
+
+- `verdict=PREFLIGHT_COMPLETE`；
+- `status=ok`；
+- `scientific_result=false`；
+- 首次轻量运行耗时 59.025 秒；
+- `--resume` 耗时 7.294 秒，并明确打印加载完成结果；
+- CUDA 设备为 RTX 3060；
+- 完整测试 75 项通过。
+
+`preflight_only=true` 会主动跳过全数据最终模型、mixture stability、auxiliary holdout
+和描述表。这意味着 RUN_018 只证明工程链路可运行，折内选择的 rank、K 和交叉熵均不是
+正式科学结论，不能用 RUN_018 判断 Safety 是否存在异质性。
+
+### 27.3 本轮发现并修复的效率问题
+
+最初的 preflight 路径错误地执行了完整折后科学拟合，且 clustered bootstrap 对每个
+cluster 反复扫描全部样本，导致两次旧路径分别在 20 分钟和 60 分钟的外层时限被终止。
+这些中止不是模型错误，也没有形成科学结果。
+
+当前修复包括：
+
+- bootstrap 先计算每个 cluster 的样本数与差值和，再按同样的随机 draws 重采样；
+- 单元测试确认优化前后数值完全一致；
+- checkpoint 输入哈希只覆盖 `votes.parquet` 与 `splits.parquet`；
+- 排除每次验证都会更新时间戳的 `data_validation.json`，避免同一数据无法 resume；
+- 为最终 scalar、continuous、mixture、stability 和 auxiliary 阶段增加进度日志；
+- 将工程 preflight 与正式科学拟合明确拆分。
+
+### 27.4 下一阶段边界
+
+现在已经具备创建正式 provisional Safety 多 seed 配置和启动器的工程条件。但正式运行
+必须关闭 `preflight_only`，保留完整最终拟合和科学 gates，并继续标记为 exploratory /
+provisional。严格精确 K3 校准没有因 RUN_018 而变成通过。
+
+### 27.5 RUN_019 正式 provisional Safety 多 seed 计划
+
+正式基础配置为 `configs/safety_provisional_multiseed_cuda.yaml`，五个独立 seed 配置位于
+`configs/safety_provisional_seeds/`，对应 1103、2207、3319、4421、5527。每个 seed
+拥有独立 artifact 目录、checkpoint 和日志，避免结果覆盖。
+
+启动器为 `scripts/run_safety_provisional_multiseed.ps1`。它按顺序运行 seeds，每个 seed
+开始前检查 GPU，持续更新总 summary，并支持 `-Resume`。基础配置继承完整 confirmatory
+参数（5 outer folds、3 inner folds、300 epochs、5 random starts、50 stability refits），
+且明确设置 `preflight_only=false`。因此 RUN_019 是昂贵的完整 Safety 科学运行，而不是
+RUN_018 的一分钟工程检查。
+
+CLI 在每个 seed 开始前同时核对 split schema、outer-fold 数和 seed。RUN_018 留下的
+2-fold splits 不会被 RUN_019 误用；切换 seed 时会生成对应的确定性 5-fold splits。
+回到已运行 seed 并使用 `-Resume` 时，同一 seed 会生成相同 splits 哈希，因此仍可复用
+该 seed 自己的 checkpoints。
+
+本节建立配置和脚本时没有启动 RUN_019。其结论仍必须标记为 provisional / exploratory，
+不能写成通过严格 model-recovery calibration 的 confirmatory 结果。

@@ -1,0 +1,259 @@
+{
+  "result_schema_version": 5,
+  "status": "ok",
+  "verdict": "PREFLIGHT_COMPLETE",
+  "scientific_result": false,
+  "preflight_only": true,
+  "dimension": "safety",
+  "selected_rank": 1,
+  "selected_classes": 2,
+  "selected_baseline": {
+    "name": "m1b",
+    "utility_l2": 0.001,
+    "style_l2": 0.001,
+    "response_styles": true,
+    "selection_boundary_detected": false,
+    "selection_boundary_parameters": [],
+    "selection_boundary": false,
+    "selection_boundary_relevant": false
+  },
+  "outer_fold_selections": [
+    {
+      "fold": 0,
+      "baseline": {
+        "name": "m1b",
+        "utility_l2": 0.001,
+        "style_l2": 0.001,
+        "response_styles": true,
+        "m1b_improvement": 0.018031656742095947,
+        "m1b_improvement_se": 0.00011581182479858398,
+        "m1b_relative_improvement": 0.018781798404024254,
+        "m1b_statistical_gate": true,
+        "m1b_practical_gate": true,
+        "m1b_high_regularisation_collapse": false,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "continuous_rank": 1,
+      "continuous_l2": 0.001,
+      "mixture_classes": 2,
+      "mixture_l2": 0.001,
+      "continuous_selection_boundary": false,
+      "mixture_selection_boundary": false
+    },
+    {
+      "fold": 1,
+      "baseline": {
+        "name": "m1b",
+        "utility_l2": 0.001,
+        "style_l2": 0.001,
+        "response_styles": true,
+        "m1b_improvement": 0.01707303524017334,
+        "m1b_improvement_se": 0.0003252029418945312,
+        "m1b_relative_improvement": 0.017762681501499053,
+        "m1b_statistical_gate": true,
+        "m1b_practical_gate": true,
+        "m1b_high_regularisation_collapse": false,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "continuous_rank": 1,
+      "continuous_l2": 0.001,
+      "mixture_classes": 2,
+      "mixture_l2": 0.001,
+      "continuous_selection_boundary": false,
+      "mixture_selection_boundary": false
+    }
+  ],
+  "folds": [
+    {
+      "fold": 0,
+      "train_votes": 268048,
+      "test_votes": 241913,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 2,
+      "baseline": {
+        "name": "m1b",
+        "utility_l2": 0.001,
+        "style_l2": 0.001,
+        "response_styles": true,
+        "m1b_improvement": 0.018031656742095947,
+        "m1b_improvement_se": 0.00011581182479858398,
+        "m1b_relative_improvement": 0.018781798404024254,
+        "m1b_statistical_gate": true,
+        "m1b_practical_gate": true,
+        "m1b_high_regularisation_collapse": false,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "continuous_l2": 0.001,
+      "mixture_l2": 0.001,
+      "m0_cross_entropy": 0.9619899962087708,
+      "scalar_cross_entropy": 1.0114779472351074,
+      "continuous_cross_entropy": 1.0114823579788208,
+      "mixture_cross_entropy": 1.0117876529693604,
+      "population_marginalized_cross_entropy": {
+        "scalar": 1.0138250589370728,
+        "continuous": 1.01382315158844,
+        "mixture": 1.011731743812561
+      },
+      "history_strata": {
+        "0_4": {
+          "votes": 71448,
+          "continuous_elpd_vs_scalar": 2.6102859465026995e-06,
+          "mixture_elpd_vs_scalar": -0.0010558817302808166
+        },
+        "5_19": {
+          "votes": 121970,
+          "continuous_elpd_vs_scalar": -2.2414244540414074e-06,
+          "mixture_elpd_vs_scalar": 6.42240047454834e-05
+        },
+        "20_plus": {
+          "votes": 48495,
+          "continuous_elpd_vs_scalar": -2.067434979835525e-05,
+          "mixture_elpd_vs_scalar": -0.00015152874402701855
+        }
+      }
+    },
+    {
+      "fold": 1,
+      "train_votes": 268295,
+      "test_votes": 241666,
+      "test_coverage": 1.0,
+      "selected_rank": 1,
+      "selected_classes": 2,
+      "baseline": {
+        "name": "m1b",
+        "utility_l2": 0.001,
+        "style_l2": 0.001,
+        "response_styles": true,
+        "m1b_improvement": 0.01707303524017334,
+        "m1b_improvement_se": 0.0003252029418945312,
+        "m1b_relative_improvement": 0.017762681501499053,
+        "m1b_statistical_gate": true,
+        "m1b_practical_gate": true,
+        "m1b_high_regularisation_collapse": false,
+        "selection_boundary": false,
+        "selection_boundary_parameters": []
+      },
+      "continuous_l2": 0.001,
+      "mixture_l2": 0.001,
+      "m0_cross_entropy": 0.9607021846679409,
+      "scalar_cross_entropy": 1.0110363960266113,
+      "continuous_cross_entropy": 1.011035680770874,
+      "mixture_cross_entropy": 1.011230707168579,
+      "population_marginalized_cross_entropy": {
+        "scalar": 1.0154175758361816,
+        "continuous": 1.015413522720337,
+        "mixture": 1.0112100839614868
+      },
+      "history_strata": {
+        "0_4": {
+          "votes": 71503,
+          "continuous_elpd_vs_scalar": 3.281848194092163e-06,
+          "mixture_elpd_vs_scalar": -0.0007358876755461097
+        },
+        "5_19": {
+          "votes": 122195,
+          "continuous_elpd_vs_scalar": 3.186705043844995e-06,
+          "mixture_elpd_vs_scalar": 6.840130663476884e-05
+        },
+        "20_plus": {
+          "votes": 47968,
+          "continuous_elpd_vs_scalar": -9.50554294831818e-06,
+          "mixture_elpd_vs_scalar": -5.650913590216078e-05
+        }
+      }
+    }
+  ],
+  "m0_cross_entropy": 0.9613464193292409,
+  "scalar_cross_entropy": 1.0112571716308594,
+  "continuous_cross_entropy": 1.0112590789794922,
+  "mixture_cross_entropy": 1.0115094184875488,
+  "scalar_vs_m0_elpd_ci": {
+    "mean": -0.049910799279661515,
+    "lower": -0.05127477604861104,
+    "upper": -0.04699059342427221
+  },
+  "continuous_elpd_ci": {
+    "mean": -1.9053554751735646e-06,
+    "lower": -9.87907172045297e-06,
+    "upper": 2.281583406115567e-06
+  },
+  "mixture_elpd_ci": {
+    "mean": -0.0002521327987778932,
+    "lower": -0.00027900140419834013,
+    "upper": -0.00022983762453813926
+  },
+  "edge_gates": {
+    "baseline": false,
+    "baseline_edge": false,
+    "continuous": false,
+    "mixture": false,
+    "baseline_reduction": -0.05191755156943594,
+    "continuous_reduction": -1.8861162979309305e-06,
+    "mixture_reduction": -0.00024943888040136557
+  },
+  "calibration": {
+    "status": "ok",
+    "policy": "provisional_effective",
+    "confirmatory": false,
+    "model_acceptance_field": "effective_status",
+    "model_status": "failed",
+    "model_effective_status": "ok",
+    "density_status": "ok",
+    "reasons": [],
+    "manifest": "E:\\CODE\\place_pulse\\place_pulse\\calibration_manifests\\run_017_provisional_safety.json",
+    "manifest_sha256": "d3e09836ec2f34f000ef1a2628c9de5592f5687fb287db165b0703b3b1e39bd7",
+    "label": "RUN_017_PROVISIONAL_MODEL_PLUS_RUN_014_STRICT_DENSITY",
+    "artifacts": {
+      "model_recovery": {
+        "path": "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_017_provisional_multiseed\\metrics\\model_recovery.json",
+        "sha256": "36cccf518e8ec8a0c91c073ab9ec724c726fe83cf31e54a205e1949d84945074"
+      },
+      "density_recovery": {
+        "path": "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_014_density_confirmatory\\metrics\\simulation_recovery.json",
+        "sha256": "701ea8cf71bbad354a9fdcc880567edae97f5ba6819c095a6807fd9405f2aa0f"
+      }
+    }
+  },
+  "skipped_stages": [
+    "final_full_data_models",
+    "mixture_stability",
+    "auxiliary_holdouts",
+    "descriptive_model_tables"
+  ],
+  "provenance": {
+    "created_at": "2026-08-03T08:35:56.585711+00:00",
+    "config_hash": "b60383a505f86e74fbcbdc002c47608709696837468eed50709289b9d7e6d0f9",
+    "git_commit": "754b688a2a04d24b604dac81cae5a74c7cc56cc5",
+    "seed": 1103,
+    "inputs": {
+      "data\\processed\\votes.parquet": "06494fa8afdcf802ab8095e5bb45cf4630a0b6e314f78e9aa29a17c0849fe049",
+      "data\\processed\\splits.parquet": "0f499c0588cabb59a4df049100841e0b1cada239a6c2fe89f17e2d74a9446dec"
+    },
+    "run_label": "RUN_018_SAFETY_PROVISIONAL_PREFLIGHT",
+    "compute": {
+      "requested": "cuda",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "python_torch": "2.7.1+cu118",
+      "cuda_available": true,
+      "cuda_runtime": "11.8",
+      "mps_built": false,
+      "mps_available": false,
+      "selected": "cuda",
+      "cuda": {
+        "device_index": 0,
+        "name": "NVIDIA GeForce RTX 3060",
+        "compute_capability": [
+          8,
+          6
+        ],
+        "total_memory_bytes": 12884377600,
+        "free_memory_bytes": 11801722880,
+        "allocator_backend": "native"
+      }
+    }
+  }
+}

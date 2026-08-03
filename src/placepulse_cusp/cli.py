@@ -5,6 +5,10 @@ import json
 import shutil
 from pathlib import Path
 
+from placepulse_cusp.calibration import (
+    assess_calibration,
+    load_calibration_manifest,
+)
 from placepulse_cusp.config import load_config
 from placepulse_cusp.data.fetch import fetch_data
 from placepulse_cusp.data.schema import standardise_votes
@@ -100,11 +104,12 @@ def _ensure_prepared(config):
     split_current = False
     if split_manifest.exists():
         try:
+            split_metadata = json.loads(split_manifest.read_text("utf-8"))
             split_current = (
-                json.loads(split_manifest.read_text("utf-8")).get(
-                    "split_schema_version"
-                )
-                == 2
+                split_metadata.get("split_schema_version") == 2
+                and split_metadata.get("outer_folds")
+                == config["splits"]["outer_folds"]
+                and split_metadata.get("seed") == config["project"]["seed"]
             )
         except (OSError, json.JSONDecodeError):
             split_current = False
@@ -144,22 +149,27 @@ def main(argv: list[str] | None = None) -> int:
             result = run_all(config, resume=args.resume)
         elif args.action in {"scalar", "heterogeneity"}:
             _ensure_prepared(config)
-            calibration_root = config["simulation"].get("calibration_artifacts")
-            metrics_root = (
-                Path(calibration_root)
-                if calibration_root
-                else Path(config["reporting"]["artifacts_dir"]) / "metrics"
-            )
-            model_path = metrics_root / "model_recovery.json"
-            density_path = metrics_root / "simulation_recovery.json"
-            if not model_path.exists() or not density_path.exists():
-                raise RuntimeError(
-                    "Model and density calibration must be completed before a "
-                    "real-data heterogeneity run."
+            if config["simulation"].get("calibration_manifest"):
+                _, _, calibration = load_calibration_manifest(config)
+            else:
+                calibration_root = config["simulation"].get("calibration_artifacts")
+                metrics_root = (
+                    Path(calibration_root)
+                    if calibration_root
+                    else Path(config["reporting"]["artifacts_dir"]) / "metrics"
                 )
-            model_status = json.loads(model_path.read_text("utf-8"))["status"]
-            density_status = json.loads(density_path.read_text("utf-8"))["status"]
-            config["_simulation_ok"] = model_status == "ok" and density_status == "ok"
+                model_path = metrics_root / "model_recovery.json"
+                density_path = metrics_root / "simulation_recovery.json"
+                if not model_path.exists() or not density_path.exists():
+                    raise RuntimeError(
+                        "Model and density calibration must be completed before a "
+                        "real-data heterogeneity run."
+                    )
+                model_recovery = json.loads(model_path.read_text("utf-8"))
+                density_recovery = json.loads(density_path.read_text("utf-8"))
+                calibration = assess_calibration(model_recovery, density_recovery)
+            config["_simulation_ok"] = calibration["status"] == "ok"
+            config["_calibration_assessment"] = calibration
             result = run_dimension(
                 config,
                 config["data"]["primary_dimension"],

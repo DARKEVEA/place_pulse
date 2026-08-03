@@ -16,6 +16,10 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import adjusted_rand_score
 from sklearn.preprocessing import StandardScaler
 
+from placepulse_cusp.calibration import (
+    assess_calibration,
+    load_calibration_manifest,
+)
 from placepulse_cusp.constants import DIMENSIONS
 from placepulse_cusp.cusp.bimodality import conditional_bimodality
 from placepulse_cusp.cusp.compare import compare_density_models
@@ -56,6 +60,15 @@ def _artifacts(config: dict[str, Any], kind: str) -> Path:
     path = Path(config["reporting"]["artifacts_dir"]) / kind
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _dimension_model_inputs(config: dict[str, Any]) -> list[Path]:
+    processed = Path(config["data"]["processed_dir"])
+    # data_validation.json contains a fresh provenance timestamp whenever the
+    # CLI validates an otherwise unchanged table. It is a report, not a model
+    # input, so hashing it would invalidate resumable fold checkpoints on every
+    # invocation.
+    return [processed / "votes.parquet", processed / "splits.parquet"]
 
 
 def _fold_checkpoint_path(
@@ -803,11 +816,7 @@ def run_dimension(
     resume: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     completed_path = _artifacts(config, "metrics") / f"{dimension}_model_comparison.json"
-    input_paths = [
-        Path(config["data"]["processed_dir"]) / "votes.parquet",
-        Path(config["data"]["processed_dir"]) / "splits.parquet",
-        Path(config["data"]["processed_dir"]) / "data_validation.json",
-    ]
+    input_paths = _dimension_model_inputs(config)
     current_provenance = metadata(config, input_paths)
     config["_runtime_input_hash"] = hashlib.sha256(
         json.dumps(current_provenance["inputs"], sort_keys=True).encode("utf-8")
@@ -1127,9 +1136,56 @@ def run_dimension(
         simulation_ok=config.get("_simulation_ok", True),
         selection_boundary=baseline["selection_boundary"],
     )
+    if config.get("reporting", {}).get("preflight_only", False):
+        preflight_ok = bool(config.get("_simulation_ok", True))
+        result = {
+            "result_schema_version": RESULT_SCHEMA_VERSION,
+            "status": "ok" if preflight_ok else "failed",
+            "verdict": (
+                "PREFLIGHT_COMPLETE"
+                if preflight_ok
+                else "MODEL_CALIBRATION_FAILED"
+            ),
+            "scientific_result": False,
+            "preflight_only": True,
+            "dimension": dimension,
+            "selected_rank": selected_rank,
+            "selected_classes": selected_classes,
+            "selected_baseline": baseline,
+            "outer_fold_selections": selections,
+            "folds": fold_metrics,
+            "m0_cross_entropy": m0_ce,
+            "scalar_cross_entropy": scalar_ce,
+            "continuous_cross_entropy": continuous_ce,
+            "mixture_cross_entropy": mixture_ce,
+            "scalar_vs_m0_elpd_ci": scalar_vs_m0_ci,
+            "continuous_elpd_ci": continuous_ci,
+            "mixture_elpd_ci": mixture_ci,
+            "edge_gates": edge_gates,
+            "calibration": config.get("_calibration_assessment"),
+            "skipped_stages": [
+                "final_full_data_models",
+                "mixture_stability",
+                "auxiliary_holdouts",
+                "descriptive_model_tables",
+            ],
+            "provenance": {
+                **current_provenance,
+                "compute": compute,
+            },
+        }
+        write_json(completed_path, result)
+        print(
+            f"[preflight] {dimension}: engineering checks complete; "
+            "skipped final scientific fits",
+            file=sys.stderr,
+            flush=True,
+        )
+        return result, {}
     # Refit the selected specification on all observations only after every
     # outer-fold score has been frozen. These models produce descriptive tables,
     # never outer-fold predictive metrics.
+    print(f"[fit] {dimension}: fitting final scalar model", file=sys.stderr, flush=True)
     final_encoder = VoteEncoder().fit(frame)
     final_encoded = final_encoder.transform(frame, device)
     set_deterministic(config["project"]["seed"])
@@ -1140,6 +1196,11 @@ def run_dimension(
         response_styles=baseline["response_styles"],
         **_training_kwargs(config),
     )
+    print(
+        f"[fit] {dimension}: fitting final continuous model",
+        file=sys.stderr,
+        flush=True,
+    )
     final_continuous = _best_continuous_fit(
         final_encoded,
         config,
@@ -1149,6 +1210,7 @@ def run_dimension(
         config["project"]["seed"] + 60000,
         selection=False,
     )
+    print(f"[fit] {dimension}: fitting final mixture model", file=sys.stderr, flush=True)
     mixture = _best_mixture_fit(
         final_encoded,
         config,
@@ -1167,6 +1229,11 @@ def run_dimension(
     }
     raw_reversal = ranking_reversal_fraction(mixture.utilities())
     if edge_gates["baseline"] and edge_gates["mixture"]:
+        print(
+            f"[fit] {dimension}: evaluating mixture stability",
+            file=sys.stderr,
+            flush=True,
+        )
         stability, stability_models = _mixture_stability(
             frame, selected_classes, mixture_l2, baseline, config, device
         )
@@ -1200,6 +1267,11 @@ def run_dimension(
     if edge_gates["baseline"] and (
         edge_gates["continuous"] or edge_gates["mixture"]
     ):
+        print(
+            f"[fit] {dimension}: evaluating auxiliary holdouts",
+            file=sys.stderr,
+            flush=True,
+        )
         auxiliary = _evaluate_auxiliary_holdouts(
             frame,
             config,
@@ -1260,6 +1332,7 @@ def run_dimension(
         "stability_refits_completed": len(stability_models),
         "auxiliary_holdouts": auxiliary,
         "gates": gates,
+        "calibration": config.get("_calibration_assessment"),
         "provenance": {
             **current_provenance,
             "compute": compute,
@@ -1549,36 +1622,42 @@ def run_all(config: dict[str, Any], *, resume: bool = False) -> dict[str, Any]:
             Path(config["data"]["processed_dir"]) / "data_validation.json",
         ],
     )
+    calibration_manifest = config["simulation"].get("calibration_manifest")
     calibration_root = config["simulation"].get("calibration_artifacts")
-    calibration_metrics = (
-        Path(calibration_root) if calibration_root else _artifacts(config, "metrics")
-    )
-    model_recovery_path = calibration_metrics / "model_recovery.json"
-    density_recovery_path = calibration_metrics / "simulation_recovery.json"
-    if calibration_root and (
-        not model_recovery_path.exists() or not density_recovery_path.exists()
-    ):
-        raise RuntimeError(
-            f"Frozen calibration artifacts are missing from {calibration_metrics}"
+    if calibration_manifest:
+        model_simulation, density_simulation, calibration = (
+            load_calibration_manifest(config)
         )
-    model_simulation = (
-        json.loads(model_recovery_path.read_text("utf-8"))
-        if (resume or calibration_root) and model_recovery_path.exists()
-        else validate_model_recovery(config, resume=resume)
-    )
-    density_simulation = (
-        json.loads(density_recovery_path.read_text("utf-8"))
-        if (resume or calibration_root) and density_recovery_path.exists()
-        else validate_density_recovery(config, resume=resume)
-    )
+    else:
+        calibration_metrics = (
+            Path(calibration_root) if calibration_root else _artifacts(config, "metrics")
+        )
+        model_recovery_path = calibration_metrics / "model_recovery.json"
+        density_recovery_path = calibration_metrics / "simulation_recovery.json"
+        if calibration_root and (
+            not model_recovery_path.exists() or not density_recovery_path.exists()
+        ):
+            raise RuntimeError(
+                f"Frozen calibration artifacts are missing from {calibration_metrics}"
+            )
+        model_simulation = (
+            json.loads(model_recovery_path.read_text("utf-8"))
+            if (resume or calibration_root) and model_recovery_path.exists()
+            else validate_model_recovery(config, resume=resume)
+        )
+        density_simulation = (
+            json.loads(density_recovery_path.read_text("utf-8"))
+            if (resume or calibration_root) and density_recovery_path.exists()
+            else validate_density_recovery(config, resume=resume)
+        )
+        calibration = assess_calibration(model_simulation, density_simulation)
     simulation = {
         "model_recovery": model_simulation,
         "density_recovery": density_simulation,
     }
-    simulation_ok = (
-        model_simulation["status"] == "ok" and density_simulation["status"] == "ok"
-    )
+    simulation_ok = calibration["status"] == "ok"
     config["_simulation_ok"] = simulation_ok
+    config["_calibration_assessment"] = calibration
     if not simulation_ok:
         write_verdict(
             config,

@@ -1,0 +1,11 @@
+﻿{
+    "status":  "complete",
+    "exit_code":  0,
+    "resumed":  true,
+    "started_at":  "2026-08-03T16:37:03.5197436+08:00",
+    "finished_at":  "2026-08-03T16:37:10.8140644+08:00",
+    "elapsed_seconds":  7.294,
+    "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_preflight_cuda.yaml",
+    "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_018_safety_preflight",
+    "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_018_safety_preflight.log"
+}

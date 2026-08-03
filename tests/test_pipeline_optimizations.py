@@ -22,6 +22,21 @@ def test_selection_disables_lbfgs_but_final_training_keeps_it():
     )
 
 
+def test_dimension_checkpoint_inputs_exclude_timestamped_validation_report():
+    config = load_config("configs/smoke.yaml")
+
+    names = [path.name for path in pipeline._dimension_model_inputs(config)]
+
+    assert names == ["votes.parquet", "splits.parquet"]
+
+
+def test_safety_preflight_is_explicitly_non_scientific():
+    config = load_config("configs/safety_provisional_preflight_cuda.yaml")
+
+    assert config["reporting"]["preflight_only"] is True
+    assert config["simulation"]["calibration_policy"] == "provisional_effective"
+
+
 def test_scalar_selection_reports_boundary_parameters(monkeypatch):
     config = load_config("configs/smoke.yaml")
     config["models"]["l2_candidates"] = [0.1, 1.0, 10.0]

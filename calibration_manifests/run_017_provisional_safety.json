@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "label": "RUN_017_PROVISIONAL_MODEL_PLUS_RUN_014_STRICT_DENSITY",
+  "policy": "provisional_effective",
+  "confirmatory": false,
+  "artifacts": {
+    "model_recovery": {
+      "path": "../artifacts/run_017_provisional_multiseed/metrics/model_recovery.json",
+      "sha256": "36cccf518e8ec8a0c91c073ab9ec724c726fe83cf31e54a205e1949d84945074",
+      "source_commit": "754b688a2a04d24b604dac81cae5a74c7cc56cc5"
+    },
+    "density_recovery": {
+      "path": "../artifacts/run_014_density_confirmatory/metrics/simulation_recovery.json",
+      "sha256": "701ea8cf71bbad354a9fdcc880567edae97f5ba6819c095a6807fd9405f2aa0f",
+      "source_commit": "0266accbbeebd7628ab2ff4c7f7600dd19ae0138"
+    }
+  },
+  "acceptance": {
+    "model_recovery": "effective_status == ok",
+    "density_recovery": "status == ok"
+  },
+  "limitations": [
+    "Strict nominal mixture-class recovery remains failed (1/5 exact K3).",
+    "This manifest permits exploratory/provisional Safety analysis only.",
+    "Results produced under this policy are not confirmatory."
+  ]
+}

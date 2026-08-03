@@ -1,0 +1,10 @@
+extends: confirmatory_cuda.yaml
+
+simulation:
+  calibration_manifest: calibration_manifests/run_017_provisional_safety.json
+  calibration_policy: provisional_effective
+
+reporting:
+  artifacts_dir: artifacts/run_019_safety_provisional_multiseed/base
+  run_label: RUN_019_SAFETY_PROVISIONAL_MULTISEED_BASE
+  preflight_only: false
