@@ -1,0 +1,43 @@
+﻿{
+    "status":  "complete",
+    "provisional":  true,
+    "confirmatory":  false,
+    "calibration_policy":  "provisional_effective",
+    "resumed":  false,
+    "requested_seeds":  [
+                            2207,
+                            3319
+                        ],
+    "started_at":  "2026-08-03T17:48:40.7509679+08:00",
+    "finished_at":  "2026-08-03T23:10:55.9963715+08:00",
+    "elapsed_seconds":  19335.245,
+    "elapsed_hours":  5.371,
+    "seeds":  [
+                  {
+                      "seed":  2207,
+                      "status":  "complete",
+                      "exit_code":  0,
+                      "resumed":  false,
+                      "started_at":  "2026-08-03T17:48:40.7901508+08:00",
+                      "finished_at":  "2026-08-03T20:29:16.6460589+08:00",
+                      "elapsed_seconds":  9635.856,
+                      "elapsed_hours":  2.677,
+                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_2207.yaml",
+                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_2207",
+                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_2207.log"
+                  },
+                  {
+                      "seed":  3319,
+                      "status":  "complete",
+                      "exit_code":  0,
+                      "resumed":  false,
+                      "started_at":  "2026-08-03T20:29:16.7040600+08:00",
+                      "finished_at":  "2026-08-03T23:10:55.9893433+08:00",
+                      "elapsed_seconds":  9699.285,
+                      "elapsed_hours":  2.694,
+                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_3319.yaml",
+                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_3319",
+                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_3319.log"
+                  }
+              ]
+}
