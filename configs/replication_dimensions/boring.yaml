@@ -1,0 +1,8 @@
+extends: ../replication_provisional_cuda.yaml
+
+data:
+  primary_dimension: boring
+
+reporting:
+  artifacts_dir: artifacts/run_020_replication_dimensions/boring_seed_1103
+  run_label: RUN_020_REPLICATION_BORING_SEED_1103

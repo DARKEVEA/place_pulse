@@ -2632,3 +2632,49 @@ CLI 在每个 seed 开始前同时核对 split schema、outer-fold 数和 seed�
 
 本节建立配置和脚本时没有启动 RUN_019。其结论仍必须标记为 provisional / exploratory，
 不能写成通过严格 model-recovery calibration 的 confirmatory 结果。
+
+### 27.6 RUN_019 完成状态
+
+RUN_019 五个 seeds（1103、2207、3319、4421、5527）已经全部完成。五次均得到
+`SCALAR_NOT_REJECTED`：scalar 相对 M0 的平均改善为 0.097861；continuous 相对
+scalar 的平均改善为 0.000015；mixture 平均改善为 0.001841，仍低于 0.005 的
+预设实际意义门槛。五次 mixture 均名义选择 K5，但最大类别平均权重为 98.07%，按
+10% 最小类别权重计算均只有一个有效类别。五 seed 总 GPU 运行时间约 15.0 小时。
+
+因此当前阶段性结论是：Safety 的共享标量轴在五个独立 splits 下稳定成立，没有发现
+达到预设实际意义门槛的 continuous 或离散类别异质性。该结论仍受 provisional policy
+约束，不能改写为严格 confirmatory 结论。
+
+### 27.7 RUN_020 五个复制维度计划
+
+Safety 五 seed 审计完成后，RUN_020 按阶段 H 进入 lively、beautiful、wealthy、
+boring、depressing 五个次要维度。它们被定义为 replication / exploratory dimensions，
+不是五个新的主假设。
+
+基础配置为 `configs/replication_provisional_cuda.yaml`，维度配置位于
+`configs/replication_dimensions/`，启动器为 `scripts/run_replication_dimensions.ps1`。
+五个维度固定使用 anchor seed 1103、完整 5 outer folds / 3 inner folds、300 epochs、
+5 random starts 和相同冻结 calibration manifest。每个维度拥有独立 artifacts、日志和
+summary；分批调用脚本时，总 summary 会合并已有维度记录，而不是覆盖历史结果。
+
+RUN_020 的目标是检查 Safety 的 scalar-only 方向是否能在其他感知维度复制，并为后续
+跨维度控制量提供输入。只有审计 RUN_020 后，才决定是否进行多 seed 次要维度扩展、
+条件双峰和 CUSP。
+
+### 27.8 RUN_020 完成状态与 RUN_021 Wealthy 筛查
+
+RUN_020 五个维度已经全部完成，五次均得到 `SCALAR_NOT_REJECTED`。Lively、Beautiful、
+Wealthy、Boring、Depressing 的 mixture 相对 scalar 改善分别为 0.002944、0.002017、
+0.004857、0.003223 和 0.001892，均未越过 0.005 的实际意义门槛。Continuous 改善在
+所有维度都接近零。各维度最终 mixture 仍由一个 94%–98% 的主类别支配；Boring 的
+第二类别仅刚刚超过 5% 有效权重线。原始排序反转不能在预测门控失败时单独解释为稳定
+机制证据。因此跨维度结果继续支持共享 scalar 方向，而不支持已确认的离散人群机制。
+
+Wealthy 距离门槛最近：总体改善为 0.004857，五折中两折越过 0.005，值得进行定向
+多 seed 筛查。RUN_021 使用 seeds 1103、2207、3319、4421、5527，基础配置为
+`configs/wealthy_provisional_multiseed_cuda.yaml`，独立 seed 配置位于
+`configs/wealthy_provisional_seeds/`，启动器为
+`scripts/run_wealthy_provisional_multiseed.ps1`。它沿用冻结的 provisional policy、
+完整 5 outer folds、300 epochs 和 5 random starts，并为每个 seed 隔离 artifacts 与日志。
+RUN_021 在本次记录时尚未产生任何可分析的 seed 结果，仍属于预备中的 replication
+screening，而不是 confirmatory 检验。

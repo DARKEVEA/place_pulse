@@ -1,0 +1,8 @@
+extends: replication_provisional_cuda.yaml
+
+data:
+  primary_dimension: wealthy
+
+reporting:
+  artifacts_dir: artifacts/run_021_wealthy_provisional_multiseed/base
+  run_label: RUN_021_WEALTHY_PROVISIONAL_MULTISEED_BASE

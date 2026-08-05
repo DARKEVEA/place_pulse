@@ -1,0 +1,8 @@
+extends: ../wealthy_provisional_multiseed_cuda.yaml
+
+project:
+  seed: 3319
+
+reporting:
+  artifacts_dir: artifacts/run_021_wealthy_provisional_multiseed/seed_3319
+  run_label: RUN_021_WEALTHY_PROVISIONAL_SEED_3319
