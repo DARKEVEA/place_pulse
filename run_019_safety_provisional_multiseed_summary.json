@@ -5,39 +5,53 @@
     "calibration_policy":  "provisional_effective",
     "resumed":  false,
     "requested_seeds":  [
-                            2207,
-                            3319
+                            1103,
+                            4421,
+                            5527
                         ],
-    "started_at":  "2026-08-03T17:48:40.7509679+08:00",
-    "finished_at":  "2026-08-03T23:10:55.9963715+08:00",
-    "elapsed_seconds":  19335.245,
-    "elapsed_hours":  5.371,
+    "started_at":  "2026-08-04T16:12:01.3128981+08:00",
+    "finished_at":  "2026-08-05T01:49:57.8698601+08:00",
+    "elapsed_seconds":  34676.557,
+    "elapsed_hours":  9.632,
     "seeds":  [
                   {
-                      "seed":  2207,
+                      "seed":  1103,
                       "status":  "complete",
                       "exit_code":  0,
                       "resumed":  false,
-                      "started_at":  "2026-08-03T17:48:40.7901508+08:00",
-                      "finished_at":  "2026-08-03T20:29:16.6460589+08:00",
-                      "elapsed_seconds":  9635.856,
-                      "elapsed_hours":  2.677,
-                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_2207.yaml",
-                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_2207",
-                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_2207.log"
+                      "started_at":  "2026-08-04T16:12:01.3571439+08:00",
+                      "finished_at":  "2026-08-04T20:28:00.2260692+08:00",
+                      "elapsed_seconds":  15358.869,
+                      "elapsed_hours":  4.266,
+                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_1103.yaml",
+                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_1103",
+                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_1103.log"
                   },
                   {
-                      "seed":  3319,
+                      "seed":  4421,
                       "status":  "complete",
                       "exit_code":  0,
                       "resumed":  false,
-                      "started_at":  "2026-08-03T20:29:16.7040600+08:00",
-                      "finished_at":  "2026-08-03T23:10:55.9893433+08:00",
-                      "elapsed_seconds":  9699.285,
-                      "elapsed_hours":  2.694,
-                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_3319.yaml",
-                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_3319",
-                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_3319.log"
+                      "started_at":  "2026-08-04T20:28:00.2780678+08:00",
+                      "finished_at":  "2026-08-04T23:09:24.4563247+08:00",
+                      "elapsed_seconds":  9684.178,
+                      "elapsed_hours":  2.69,
+                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_4421.yaml",
+                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_4421",
+                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_4421.log"
+                  },
+                  {
+                      "seed":  5527,
+                      "status":  "complete",
+                      "exit_code":  0,
+                      "resumed":  false,
+                      "started_at":  "2026-08-04T23:09:24.5163235+08:00",
+                      "finished_at":  "2026-08-05T01:49:57.8623004+08:00",
+                      "elapsed_seconds":  9633.346,
+                      "elapsed_hours":  2.676,
+                      "config":  "E:\\CODE\\place_pulse\\place_pulse\\configs\\safety_provisional_seeds\\seed_5527.yaml",
+                      "artifacts":  "E:\\CODE\\place_pulse\\place_pulse\\artifacts\\run_019_safety_provisional_multiseed\\seed_5527",
+                      "log":  "E:\\CODE\\place_pulse\\place_pulse\\run_019_safety_seed_5527.log"
                   }
               ]
 }
